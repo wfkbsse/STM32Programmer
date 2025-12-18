@@ -3407,15 +3407,9 @@ public partial class MainWindow : Window
                     if (SerialStatusIcon != null)
                         SerialStatusIcon.Foreground = new SolidColorBrush(Color.FromRgb(0, 150, 0));
                     
-                    // 启用控件
-                    if (UpdateDeviceStatusText != null)
-                        UpdateDeviceStatusText.Text = "已连接";
-                        
-                    if (ReadDeviceInfoButton != null)
-                        ReadDeviceInfoButton.IsEnabled = true;
-                    
-                    if (EnterBootModeButton != null)
-                        EnterBootModeButton.IsEnabled = true;
+                    // 启用串口发送按钮
+                    if (SerialSendButton != null)
+                        SerialSendButton.IsEnabled = true;
                     
                     ShowNotification($"已连接到串口 {portName}", PackIconKind.Console);
                     
@@ -3454,12 +3448,9 @@ public partial class MainWindow : Window
             if (SerialStatusIcon != null)
                 SerialStatusIcon.Foreground = new SolidColorBrush(Color.FromRgb(136, 136, 136));
             
-            // 禁用控件
-            if (UpdateDeviceStatusText != null)
-                UpdateDeviceStatusText.Text = "未连接";
-                
-            if (ReadDeviceInfoButton != null)
-                ReadDeviceInfoButton.IsEnabled = false;
+            // 禁用串口发送按钮
+            if (SerialSendButton != null)
+                SerialSendButton.IsEnabled = false;
             
             ShowNotification("已断开串口连接", PackIconKind.Console);
             LogMessage("已断开串口连接");
@@ -3470,586 +3461,69 @@ public partial class MainWindow : Window
         }
     }
 
-    // 选择更新固件文件
-    private void SelectUpdateFirmware_Click(object sender, RoutedEventArgs e)
+    #region 串口日志功能
+    
+    // 清除串口日志
+    private void ClearSerialLog_Click(object sender, RoutedEventArgs e)
     {
         try
         {
-            var dialog = new Microsoft.Win32.OpenFileDialog
+            if (SerialLogTextBlock != null)
             {
-                Title = "选择固件文件",
-                Filter = "固件文件 (*.bin;*.hex)|*.bin;*.hex|所有文件 (*.*)|*.*",
-                CheckFileExists = true
+                SerialLogTextBlock.Text = string.Empty;
+            }
+            LogMessage("已清除串口日志");
+        }
+        catch (Exception ex)
+        {
+            LogMessage($"清除串口日志时出错: {ex.Message}", LogLevel.Error);
+        }
+    }
+    
+    // 保存串口日志
+    private void SaveSerialLog_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (SerialLogTextBlock == null || string.IsNullOrEmpty(SerialLogTextBlock.Text))
+            {
+                ShowNotification("没有可保存的日志", PackIconKind.Alert);
+                return;
+            }
+            
+            var dialog = new Microsoft.Win32.SaveFileDialog
+            {
+                Title = "保存串口日志",
+                Filter = "文本文件 (*.txt)|*.txt|所有文件 (*.*)|*.*",
+                DefaultExt = ".txt",
+                FileName = $"SerialLog_{DateTime.Now:yyyyMMdd_HHmmss}.txt"
             };
             
             if (dialog.ShowDialog() == true)
             {
-                string filePath = dialog.FileName;
-                if (UpdateFirmwarePathTextBox == null)
-                {
-                    LogMessage("更新固件路径文本框未初始化", LogLevel.Error);
-                    return;
-                }
-                
-                UpdateFirmwarePathTextBox.Text = filePath;
-                
-                // 显示文件信息
-                var fileInfo = new FileInfo(filePath);
-                if (fileInfo.Exists)
-                {
-                    if (UpdateFileNameText != null) 
-                        UpdateFileNameText.Text = fileInfo.Name;
-                    
-                    if (UpdateFileSizeText != null)
-                        UpdateFileSizeText.Text = FormatFileSize(fileInfo.Length);
-                    
-                    if (UpdateFileModifiedText != null)
-                        UpdateFileModifiedText.Text = fileInfo.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss");
-                    
-                    // 此处可以添加提取固件版本号的逻辑
-                    if (UpdateFirmwareVersionText != null)
-                        UpdateFirmwareVersionText.Text = "待读取";
-                    
-                    // 启用校验按钮
-                    if (CheckFirmwareButton != null)
-                        CheckFirmwareButton.IsEnabled = true;
-                    
-                    // 如果设备已连接，启用更新按钮
-                    if (UpdateDeviceStatusText != null && 
-                        UpdateDeviceStatusText.Text.Contains("已连接") && 
-                        StartUpdateButton != null)
-                    {
-                        StartUpdateButton.IsEnabled = true;
-                    }
-                    
-                    LogMessage($"已选择更新固件文件: {fileInfo.Name}");
-                }
+                File.WriteAllText(dialog.FileName, SerialLogTextBlock.Text);
+                ShowNotification($"日志已保存到 {Path.GetFileName(dialog.FileName)}", PackIconKind.CheckCircle);
+                LogMessage($"串口日志已保存到: {dialog.FileName}");
             }
         }
         catch (Exception ex)
         {
-            LogMessage($"选择更新固件文件时出错: {ex.Message}", LogLevel.Error);
+            LogMessage($"保存串口日志时出错: {ex.Message}", LogLevel.Error);
+            ShowNotification($"保存失败: {ex.Message}", PackIconKind.Alert);
         }
     }
     
-    // 校验固件
-    private void CheckFirmware_Click(object sender, RoutedEventArgs e)
+    // 串口发送文本框按键事件
+    private void SerialSendTextBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
-        try
+        if (e.Key == Key.Enter)
         {
-            if (UpdateFirmwarePathTextBox == null || string.IsNullOrEmpty(UpdateFirmwarePathTextBox.Text))
-            {
-                ShowNotification("请先选择固件文件", PackIconKind.Alert);
-                return;
-            }
-            
-            // 显示校验中的状态
-            if (UpdateStatusText != null)
-                UpdateStatusText.Text = "正在校验固件...";
-            
-            // 模拟进度 - 实际项目中需要根据校验逻辑实现
-            Task.Run(async () =>
-            {
-                for (int i = 0; i <= 100; i += 10)
-                {
-                    await Dispatcher.InvokeAsync(() =>
-                    {
-                        if (UpdateProgressBar != null)
-                            UpdateProgressBar.Value = i;
-                        
-                        if (UpdateProgressText != null)
-                            UpdateProgressText.Text = $"{i}%";
-                    });
-                    
-                    await Task.Delay(200); // 模拟校验过程
-                }
-                
-                // 校验完成
-                await Dispatcher.InvokeAsync(() =>
-                {
-                    if (UpdateStatusText != null)
-                        UpdateStatusText.Text = "固件校验成功，可以进行更新操作";
-                    
-                    ShowNotification("固件校验成功", PackIconKind.CheckCircle);
-                    
-                    // 提取版本信息 - 示例代码
-                    if (UpdateFirmwareVersionText != null)
-                        UpdateFirmwareVersionText.Text = "v1.0.0";
-                });
-            });
-        }
-        catch (Exception ex)
-        {
-            LogMessage($"校验固件时出错: {ex.Message}", LogLevel.Error);
-            if (UpdateStatusText != null)
-                UpdateStatusText.Text = $"校验出错: {ex.Message}";
-            ShowNotification($"校验出错: {ex.Message}", PackIconKind.Alert);
+            SerialSendButton_Click(sender, e);
         }
     }
     
-    // 读取设备信息
-    private void ReadDeviceInfo_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            if (UpdateStatusText != null)
-                UpdateStatusText.Text = "正在读取设备信息...";
-            
-            // 模拟读取设备信息 - 实际项目中需要通过串口通信实现
-            Task.Run(async () =>
-            {
-                // 模拟延时
-                await Task.Delay(1000);
-                
-                // 更新UI
-                await Dispatcher.InvokeAsync(() =>
-                {
-                    // 模拟设备信息
-                    if (UpdateDeviceModelText != null)
-                        UpdateDeviceModelText.Text = "STM32F103C8T6";
-                    
-                    if (CurrentFirmwareVersionText != null)
-                        CurrentFirmwareVersionText.Text = "v0.9.2";
-                    
-                    if (UpdateDeviceIdText != null)
-                        UpdateDeviceIdText.Text = "0123456789ABCDEF";
-                    
-                    if (UpdateStatusText != null)
-                        UpdateStatusText.Text = "设备信息读取成功";
-                    
-                    ShowNotification("设备信息读取成功", PackIconKind.InformationOutline);
-                    
-                    // 如果已选择固件，启用更新按钮
-                    if (UpdateFirmwarePathTextBox != null && 
-                        !string.IsNullOrEmpty(UpdateFirmwarePathTextBox.Text) && 
-                        StartUpdateButton != null)
-                    {
-                        StartUpdateButton.IsEnabled = true;
-                    }
-                });
-            });
-        }
-        catch (Exception ex)
-        {
-            LogMessage($"读取设备信息时出错: {ex.Message}", LogLevel.Error);
-            if (UpdateStatusText != null)
-                UpdateStatusText.Text = $"读取设备信息出错: {ex.Message}";
-            ShowNotification($"读取出错: {ex.Message}", PackIconKind.Alert);
-        }
-    }
-    
-    // 开始更新固件
-    private void StartUpdate_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            // 检查是否选择了固件文件
-            if (UpdateFirmwarePathTextBox == null || string.IsNullOrEmpty(UpdateFirmwarePathTextBox.Text))
-            {
-                ShowNotification("请先选择固件文件", PackIconKind.Alert);
-                return;
-            }
-            
-            // 检查设备连接状态
-            if (UpdateDeviceStatusText == null || !UpdateDeviceStatusText.Text.Contains("已连接"))
-            {
-                ShowNotification("请先连接设备", PackIconKind.Alert);
-                return;
-            }
-            
-            // 获取烧录模式
-            bool isSerialBurnMode = RadioButtonSerialPort?.IsChecked == true;
-            
-            // 更新UI状态
-            if (StartUpdateButton != null)
-                StartUpdateButton.IsEnabled = false;
-                
-            if (ReadDeviceInfoButton != null)
-                ReadDeviceInfoButton.IsEnabled = false;
-                
-            if (CheckFirmwareButton != null)
-                CheckFirmwareButton.IsEnabled = false;
-                
-            if (SelectUpdateFirmwareButton != null)
-                SelectUpdateFirmwareButton.IsEnabled = false;
-                
-            if (ConnectSerialButton != null)
-                ConnectSerialButton.IsEnabled = false;
-                
-            if (EnterBootModeButton != null)
-                EnterBootModeButton.IsEnabled = false;
-            
-            if (UpdateStatusText != null)
-                UpdateStatusText.Text = "正在准备更新固件...";
-            
-            // 获取更新选项
-            bool backupFirmware = BackupFirmwareCheckBox?.IsChecked == true;
-            bool verifyAfterUpdate = VerifyAfterUpdateCheckBox?.IsChecked == true;
-            bool autoReboot = AutoRebootCheckBox?.IsChecked == true;
-            
-            // 读取固件文件
-            string firmwarePath = UpdateFirmwarePathTextBox.Text;
-            
-            if (!File.Exists(firmwarePath))
-            {
-                ShowNotification("固件文件不存在", PackIconKind.Alert);
-                RestoreUIState();
-                return;
-            }
-            
-            byte[] firmwareData;
-            try
-            {
-                firmwareData = File.ReadAllBytes(firmwarePath);
-                LogMessage($"已加载固件文件: {Path.GetFileName(firmwarePath)}, 大小: {firmwareData.Length} 字节");
-            }
-            catch (Exception ex)
-            {
-                LogMessage($"读取固件文件时出错: {ex.Message}", LogLevel.Error);
-                ShowNotification($"读取固件文件失败: {ex.Message}", PackIconKind.Alert);
-                RestoreUIState();
-                return;
-            }
-            
-            // 开始任务
-            Task.Run(async () =>
-            {
-                try
-                {
-                    if (isSerialBurnMode)
-                    {
-                        // 串口烧录模式
-                        if (_serialBurnService == null || !_serialBurnService.IsConnected)
-                        {
-                            await Dispatcher.InvokeAsync(() =>
-                            {
-                                LogMessage("串口未连接或烧录服务未初始化", LogLevel.Error);
-                                ShowNotification("串口未连接", PackIconKind.Alert);
-                                RestoreUIState();
-                            });
-                            return;
-                        }
-                        
-                        // 注册进度更新事件
-                        _serialBurnService.ProgressChanged += (sender, progress) =>
-                        {
-                            Dispatcher.Invoke(() =>
-                            {
-                                if (UpdateProgressBar != null)
-                                    UpdateProgressBar.Value = progress;
-                                
-                                if (UpdateProgressText != null)
-                                    UpdateProgressText.Text = $"{progress}%";
-                            });
-                        };
-                        
-                        // 注册状态更新事件
-                        _serialBurnService.StatusChanged += (sender, status) =>
-                        {
-                            Dispatcher.Invoke(() =>
-                            {
-                                if (UpdateStatusText != null)
-                                    UpdateStatusText.Text = status;
-                            });
-                        };
-                        
-                        // 开始烧录
-                        bool success = await _serialBurnService.UploadFirmware(firmwareData);
-                        
-                        if (!success)
-                        {
-                            await Dispatcher.InvokeAsync(() =>
-                            {
-                                if (UpdateStatusText != null)
-                                    UpdateStatusText.Text = "固件更新失败";
-                                
-                                ShowNotification("固件更新失败", PackIconKind.Alert);
-                            });
-                            return;
-                        }
-                        
-                        // 更新完成
-                        await Dispatcher.InvokeAsync(() => {
-                            if (UpdateStatusText != null)
-                                UpdateStatusText.Text = "固件更新成功！";
-                                
-                            if (UpdateProgressBar != null)
-                                UpdateProgressBar.Value = 100;
-                                
-                            if (UpdateProgressText != null)
-                                UpdateProgressText.Text = "100%";
-                            
-                            ShowNotification("固件更新成功", PackIconKind.CheckCircle);
-                            LogMessage("固件更新成功");
-                        });
-                        
-                        // 如果开启了自动重启
-                        if (autoReboot)
-                        {
-                            await Dispatcher.InvokeAsync(() => {
-                                if (UpdateStatusText != null)
-                                    UpdateStatusText.Text = "正在重启设备...";
-                            });
-                            
-                            // 重启设备
-                            await _serialBurnService.ResetDevice();
-                            
-                            await Dispatcher.InvokeAsync(() => {
-                                if (UpdateStatusText != null)
-                                    UpdateStatusText.Text = "设备已重启，固件更新完成";
-                                
-                                ShowNotification("设备已重启", PackIconKind.Restart);
-                            });
-                        }
-                    }
-                    else
-                    {
-                        // ST-Link烧录模式 - 使用原有的更新过程
-                        // 阶段1：备份
-                        if (backupFirmware)
-                        {
-                            await Dispatcher.InvokeAsync(() => {
-                                if (UpdateStatusText != null)
-                                    UpdateStatusText.Text = "正在备份原固件...";
-                                    
-                                if (UpdateProgressBar != null)
-                                    UpdateProgressBar.Value = 0;
-                                    
-                                if (UpdateProgressText != null)
-                                    UpdateProgressText.Text = "0%";
-                            });
-                            
-                            for (int i = 0; i <= 100; i += 5)
-                            {
-                                await Task.Delay(100); // 模拟备份过程
-                                
-                                await Dispatcher.InvokeAsync(() => {
-                                    if (UpdateProgressBar != null)
-                                        UpdateProgressBar.Value = i;
-                                        
-                                    if (UpdateProgressText != null)
-                                        UpdateProgressText.Text = $"{i}%";
-                                });
-                            }
-                        }
-                        
-                        // 阶段2：擦除
-                        await Dispatcher.InvokeAsync(() => {
-                            if (UpdateStatusText != null)
-                                UpdateStatusText.Text = "正在擦除原固件...";
-                                
-                            if (UpdateProgressBar != null)
-                                UpdateProgressBar.Value = 0;
-                                
-                            if (UpdateProgressText != null)
-                                UpdateProgressText.Text = "0%";
-                        });
-                        
-                        for (int i = 0; i <= 100; i += 10)
-                        {
-                            await Task.Delay(150); // 模拟擦除过程
-                            
-                            await Dispatcher.InvokeAsync(() => {
-                                if (UpdateProgressBar != null)
-                                    UpdateProgressBar.Value = i;
-                                    
-                                if (UpdateProgressText != null)
-                                    UpdateProgressText.Text = $"{i}%";
-                            });
-                        }
-                        
-                        // 阶段3：写入
-                        await Dispatcher.InvokeAsync(() => {
-                            if (UpdateStatusText != null)
-                                UpdateStatusText.Text = "正在写入新固件...";
-                                
-                            if (UpdateProgressBar != null)
-                                UpdateProgressBar.Value = 0;
-                                
-                            if (UpdateProgressText != null)
-                                UpdateProgressText.Text = "0%";
-                        });
-                        
-                        for (int i = 0; i <= 100; i += 2)
-                        {
-                            await Task.Delay(50); // 模拟写入过程
-                            
-                            await Dispatcher.InvokeAsync(() => {
-                                if (UpdateProgressBar != null)
-                                    UpdateProgressBar.Value = i;
-                                    
-                                if (UpdateProgressText != null)
-                                    UpdateProgressText.Text = $"{i}%";
-                            });
-                        }
-                        
-                        // 阶段4：验证
-                        if (verifyAfterUpdate)
-                        {
-                            await Dispatcher.InvokeAsync(() => {
-                                if (UpdateStatusText != null)
-                                    UpdateStatusText.Text = "正在验证固件...";
-                                    
-                                if (UpdateProgressBar != null)
-                                    UpdateProgressBar.Value = 0;
-                                    
-                                if (UpdateProgressText != null)
-                                    UpdateProgressText.Text = "0%";
-                            });
-                            
-                            for (int i = 0; i <= 100; i += 5)
-                            {
-                                await Task.Delay(100); // 模拟验证过程
-                                
-                                await Dispatcher.InvokeAsync(() => {
-                                    if (UpdateProgressBar != null)
-                                        UpdateProgressBar.Value = i;
-                                        
-                                    if (UpdateProgressText != null)
-                                        UpdateProgressText.Text = $"{i}%";
-                                });
-                            }
-                        }
-                        
-                        // 更新完成
-                        await Dispatcher.InvokeAsync(() => {
-                            if (UpdateStatusText != null)
-                                UpdateStatusText.Text = "固件更新成功！";
-                                
-                            if (UpdateProgressBar != null)
-                                UpdateProgressBar.Value = 100;
-                                
-                            if (UpdateProgressText != null)
-                                UpdateProgressText.Text = "100%";
-                            
-                            ShowNotification("固件更新成功", PackIconKind.CheckCircle);
-                            LogMessage("固件更新成功");
-                        });
-                        
-                        // 如果开启了自动重启
-                        if (autoReboot)
-                        {
-                            await Dispatcher.InvokeAsync(() => {
-                                if (UpdateStatusText != null)
-                                    UpdateStatusText.Text = "正在重启设备...";
-                            });
-                            
-                            // 模拟重启过程
-                            await Task.Delay(2000); 
-                            
-                            await Dispatcher.InvokeAsync(() => {
-                                if (UpdateStatusText != null)
-                                    UpdateStatusText.Text = "设备已重启，固件更新完成";
-                                ShowNotification("设备已重启", PackIconKind.Restart);
-                            });
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    await Dispatcher.InvokeAsync(() => {
-                        if (UpdateStatusText != null)
-                            UpdateStatusText.Text = $"更新过程中出错: {ex.Message}";
-                        
-                        LogMessage($"更新固件时出错: {ex.Message}", LogLevel.Error);
-                        ShowNotification($"更新出错: {ex.Message}", PackIconKind.Alert);
-                    });
-                }
-                finally
-                {
-                    // 恢复UI状态
-                    await Dispatcher.InvokeAsync(() => RestoreUIState());
-                }
-            });
-        }
-        catch (Exception ex)
-        {
-            LogMessage($"启动固件更新时出错: {ex.Message}", LogLevel.Error);
-            if (UpdateStatusText != null)
-                UpdateStatusText.Text = $"启动更新出错: {ex.Message}";
-            
-            ShowNotification($"启动更新出错: {ex.Message}", PackIconKind.Alert);
-            
-            // 恢复按钮状态
-            RestoreUIState();
-        }
-    }
-
-    // 恢复UI状态
-    private void RestoreUIState()
-    {
-        if (StartUpdateButton != null)
-            StartUpdateButton.IsEnabled = true;
-            
-        if (ReadDeviceInfoButton != null)
-            ReadDeviceInfoButton.IsEnabled = true;
-            
-        if (CheckFirmwareButton != null)
-            CheckFirmwareButton.IsEnabled = true;
-            
-        if (SelectUpdateFirmwareButton != null)
-            SelectUpdateFirmwareButton.IsEnabled = true;
-            
-        if (ConnectSerialButton != null)
-            ConnectSerialButton.IsEnabled = true;
-            
-        if (EnterBootModeButton != null)
-            EnterBootModeButton.IsEnabled = true;
-    }
-
-    // 烧录模式改变事件
-    private void BurnMode_Changed(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            if (RadioButtonSTLink != null && RadioButtonSTLink.IsChecked == true)
-            {
-                // 使用ST-Link模式
-                if (SerialBurnSettings != null)
-                    SerialBurnSettings.Visibility = Visibility.Collapsed;
-                
-                if (EnterBootModeButton != null)
-                    EnterBootModeButton.Visibility = Visibility.Collapsed;
-                
-                LogMessage("已切换到ST-Link烧录模式");
-            }
-            else
-            {
-                // 使用串口烧录模式
-                if (SerialBurnSettings != null)
-                    SerialBurnSettings.Visibility = Visibility.Visible;
-                
-                if (EnterBootModeButton != null)
-                    EnterBootModeButton.Visibility = Visibility.Visible;
-                
-                LogMessage("已切换到串口烧录模式");
-            }
-        }
-        catch (Exception ex)
-        {
-            LogMessage($"切换烧录模式时出错: {ex.Message}", LogLevel.Error);
-        }
-    }
-    
-    // 自定义波特率复选框事件
-    private void UseCustomBaud_CheckedChanged(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            if (UseCustomBaudCheckBox != null && CustomBaudPanel != null)
-            {
-                CustomBaudPanel.Visibility = UseCustomBaudCheckBox.IsChecked == true ? 
-                    Visibility.Visible : Visibility.Collapsed;
-            }
-        }
-        catch (Exception ex)
-        {
-            LogMessage($"切换自定义波特率时出错: {ex.Message}", LogLevel.Error);
-        }
-    }
-
-    // 进入引导模式按钮事件处理
-    private async void EnterBootMode_Click(object sender, RoutedEventArgs e)
+    // 发送串口数据
+    private void SerialSendButton_Click(object sender, RoutedEventArgs e)
     {
         try
         {
@@ -4059,152 +3533,59 @@ public partial class MainWindow : Window
                 return;
             }
             
-            // 禁用按钮，防止重复操作
-            if (EnterBootModeButton != null)
-                EnterBootModeButton.IsEnabled = false;
-            
-            if (UpdateStatusText != null)
-                UpdateStatusText.Text = "正在尝试进入STM32 Bootloader模式...";
-            
-            // 获取引导模式
-            var bootModeType = SerialBurnService.BootModeType.AutoSwitch;
-            if (BootModeComboBox?.SelectedIndex != null)
+            if (SerialSendTextBox == null || string.IsNullOrEmpty(SerialSendTextBox.Text))
             {
-                switch (BootModeComboBox.SelectedIndex)
-                {
-                    case 0:
-                        bootModeType = SerialBurnService.BootModeType.AutoSwitch;
-                        break;
-                    case 1:
-                        bootModeType = SerialBurnService.BootModeType.ManualPinControl;
-                        break;
-                    case 2:
-                        bootModeType = SerialBurnService.BootModeType.UseResetCommand;
-                        break;
-                }
-            }
-            
-            // 进入Bootloader模式
-            bool success = await _serialBurnService.EnterBootloaderMode(bootModeType);
-            
-            if (success)
-            {
-                if (UpdateStatusText != null)
-                    UpdateStatusText.Text = "已成功进入STM32 Bootloader模式";
-                
-                ShowNotification("已进入Bootloader模式", PackIconKind.CheckCircle);
-                
-                // 获取设备信息
-                await ReadBootloaderInfo();
-            }
-            else
-            {
-                if (UpdateStatusText != null)
-                    UpdateStatusText.Text = "无法进入STM32 Bootloader模式，请检查连接和引导模式设置";
-                
-                ShowNotification("进入Bootloader模式失败", PackIconKind.Alert);
-            }
-        }
-        catch (Exception ex)
-        {
-            LogMessage($"进入Bootloader模式时出错: {ex.Message}", LogLevel.Error);
-            if (UpdateStatusText != null)
-                UpdateStatusText.Text = $"进入Bootloader模式失败: {ex.Message}";
-            
-            ShowNotification($"操作失败: {ex.Message}", PackIconKind.Alert);
-        }
-        finally
-        {
-            // 恢复按钮状态
-            if (EnterBootModeButton != null)
-                EnterBootModeButton.IsEnabled = true;
-        }
-    }
-    
-    // 读取Bootloader信息
-    private async Task ReadBootloaderInfo()
-    {
-        try
-        {
-            if (_serialBurnService == null || !_serialBurnService.IsConnected)
-            {
+                ShowNotification("请输入要发送的数据", PackIconKind.Alert);
                 return;
             }
             
-            if (UpdateStatusText != null)
-                UpdateStatusText.Text = "正在读取设备信息...";
+            string dataToSend = SerialSendTextBox.Text;
             
-            // 获取设备ID
-            string deviceId = await _serialBurnService.GetDeviceId();
+            // 发送数据
+            _serialBurnService.SendData(dataToSend);
             
-            // 获取Bootloader版本
-            string bootloaderVersion = await _serialBurnService.GetBootloaderVersion();
+            // 添加到日志
+            AppendSerialLog($"[TX] {dataToSend}");
             
-            // 更新UI
-            await Dispatcher.InvokeAsync(() =>
+            // 清空输入框
+            SerialSendTextBox.Text = string.Empty;
+            
+            LogMessage($"已发送串口数据: {dataToSend}");
+        }
+        catch (Exception ex)
+        {
+            LogMessage($"发送串口数据时出错: {ex.Message}", LogLevel.Error);
+            ShowNotification($"发送失败: {ex.Message}", PackIconKind.Alert);
+        }
+    }
+    
+    // 添加串口日志
+    private void AppendSerialLog(string message)
+    {
+        try
+        {
+            Dispatcher.Invoke(() =>
             {
-                if (!string.IsNullOrEmpty(deviceId) && UpdateDeviceIdText != null)
-                    UpdateDeviceIdText.Text = deviceId;
-                
-                if (!string.IsNullOrEmpty(bootloaderVersion) && CurrentFirmwareVersionText != null)
-                    CurrentFirmwareVersionText.Text = bootloaderVersion;
-                
-                if (UpdateDeviceModelText != null)
+                if (SerialLogTextBlock != null)
                 {
-                    // 根据设备ID推断设备型号
-                    string deviceModel = GetDeviceModelFromId(deviceId);
-                    UpdateDeviceModelText.Text = deviceModel;
+                    string timestamp = DateTime.Now.ToString("HH:mm:ss.fff");
+                    SerialLogTextBlock.Text += $"[{timestamp}] {message}\n";
+                    
+                    // 自动滚动到底部
+                    if (SerialLogScrollViewer != null)
+                    {
+                        SerialLogScrollViewer.ScrollToEnd();
+                    }
                 }
-                
-                if (UpdateDeviceStatusText != null)
-                    UpdateDeviceStatusText.Text = "已连接 (Bootloader模式)";
-                
-                if (StartUpdateButton != null && !string.IsNullOrEmpty(UpdateFirmwarePathTextBox?.Text))
-                    StartUpdateButton.IsEnabled = true;
-                
-                if (UpdateStatusText != null)
-                    UpdateStatusText.Text = "设备信息读取成功，可以进行固件更新";
             });
         }
         catch (Exception ex)
         {
-            LogMessage($"读取Bootloader信息时出错: {ex.Message}", LogLevel.Error);
+            Debug.WriteLine($"添加串口日志时出错: {ex.Message}");
         }
     }
     
-    // 根据设备ID推断STM32设备型号
-    private string GetDeviceModelFromId(string deviceId)
-    {
-        if (string.IsNullOrEmpty(deviceId))
-            return "未知设备";
-        
-        // 简单处理：根据ID前几位判断STM32系列
-        // 实际项目中应有更完整的对照表
-        if (deviceId.StartsWith("0410"))
-            return "STM32F10x";
-        else if (deviceId.StartsWith("0411"))
-            return "STM32F2xx";
-        else if (deviceId.StartsWith("0413"))
-            return "STM32F4xx";
-        else if (deviceId.StartsWith("0419"))
-            return "STM32F4xx (DSP and FPU)";
-        else if (deviceId.StartsWith("0430"))
-            return "STM32F1xx (Low/Medium density)";
-        else if (deviceId.StartsWith("0431"))
-            return "STM32F1xx (High density)";
-        else if (deviceId.StartsWith("0440"))
-            return "STM32F0xx";
-        else if (deviceId.StartsWith("0444"))
-            return "STM32F03x";
-        else if (deviceId.StartsWith("0451"))
-            return "STM32F7xx";
-        else if (deviceId.StartsWith("0460"))
-            return "STM32G0xx";
-        else if (deviceId.StartsWith("0470"))
-            return "STM32L0xx";
-        
-        return $"STM32 (ID: {deviceId})";
-    }
+    #endregion
 }
 
 // 扩展方法类

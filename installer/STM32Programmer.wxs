@@ -22,22 +22,16 @@
         
         <!-- 中文UI界面 -->
         <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
-        <UIRef Id="WixUI_ErrorProgressText" />
         
-        <!-- 中文本地化字符串 -->
+        <!-- 安装界面图片 - 只保留许可证，使用WiX默认图片样式 -->
         <WixVariable Id="WixUILicenseRtf" Value="installer\License.rtf" />
-        <WixVariable Id="WixUIBannerBmp" Value="installer\banner.bmp" />
-        <WixVariable Id="WixUIDialogBmp" Value="installer\dialog.bmp" />
-        
-        <!-- 安装完成后启动程序选项 -->
-        <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="安装完成后启动 STM32Programmer" />
-        <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
         
         <!-- 功能定义 -->
         <Feature Id="ProductFeature" Title="STM32Programmer 主程序" Description="STM32固件烧写工具主程序（必需）" Level="1" AllowAbsent="no">
             <ComponentGroupRef Id="ProductComponents" />
             <ComponentGroupRef Id="RuntimeComponents" />
             <ComponentRef Id="ApplicationShortcut" />
+            <ComponentRef Id="UninstallShortcut" />
         </Feature>
         
         <Feature Id="DesktopShortcutFeature" Title="桌面快捷方式" Description="在桌面创建程序快捷方式" Level="1">
@@ -47,9 +41,8 @@
         <!-- 程序图标 -->
         <Icon Id="ProductIcon" SourceFile="$(var.SourceDir)\app.ico" />
         <Property Id="ARPPRODUCTICON" Value="ProductIcon" />
-        <Property Id="ARPURLINFOABOUT" Value="https://github.com/stm32programmer" />
-        <Property Id="ARPURLUPDATEINFO" Value="https://github.com/stm32programmer/releases" />
-        <Property Id="ARPHELPLINK" Value="https://github.com/stm32programmer/issues" />
+        <Property Id="ARPURLINFOABOUT" Value="https://github.com/wfkbsse/STM32Programmer" />
+        <Property Id="ARPHELPLINK" Value="https://github.com/wfkbsse/STM32Programmer/issues" />
         <Property Id="ARPNOREPAIR" Value="yes" />
     </Package>
     
@@ -107,6 +100,7 @@
             </Component>
         </ComponentGroup>
         
+        <!-- 开始菜单快捷方式 -->
         <Component Id="ApplicationShortcut" Guid="*" Directory="ApplicationProgramsFolder">
             <Shortcut Id="ApplicationStartMenuShortcut"
                       Name="STM32Programmer"
@@ -118,6 +112,18 @@
             <RegistryValue Root="HKCU" Key="Software\STM32Programmer" Name="installed" Type="integer" Value="1" KeyPath="yes" />
         </Component>
         
+        <!-- 卸载快捷方式 -->
+        <Component Id="UninstallShortcut" Guid="*" Directory="ApplicationProgramsFolder">
+            <Shortcut Id="UninstallProduct"
+                      Name="卸载 STM32Programmer"
+                      Description="卸载 STM32Programmer"
+                      Target="[System64Folder]msiexec.exe"
+                      Arguments="/x [ProductCode]"
+                      Icon="ProductIcon" />
+            <RegistryValue Root="HKCU" Key="Software\STM32Programmer" Name="uninstall" Type="integer" Value="1" KeyPath="yes" />
+        </Component>
+        
+        <!-- 桌面快捷方式 -->
         <Component Id="DesktopShortcut" Guid="*" Directory="DesktopFolder">
             <Shortcut Id="DesktopShortcut"
                       Name="STM32Programmer"

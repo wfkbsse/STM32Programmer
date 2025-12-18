@@ -110,6 +110,28 @@ namespace STM32Programmer.Services
         }
 
         /// <summary>
+        /// 发送数据到串口
+        /// </summary>
+        public void SendData(string data)
+        {
+            try
+            {
+                if (_serialPort?.IsOpen != true)
+                {
+                    _logService?.LogWarning("串口", "串口未连接，无法发送数据");
+                    return;
+                }
+                
+                _serialPort.WriteLine(data);
+                _logService?.LogInfo("串口", $"已发送数据: {data}");
+            }
+            catch (Exception ex)
+            {
+                _logService?.LogError("串口", $"发送数据失败: {ex.Message}");
+            }
+        }
+
+        /// <summary>
         /// 进入Bootloader模式
         /// </summary>
         public async Task<bool> EnterBootloaderMode(BootModeType bootModeType)

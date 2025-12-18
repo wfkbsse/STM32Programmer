@@ -453,103 +453,90 @@ public partial class MainWindow : Window
         }
     }
     
-    private async void AutoSearchBootFile_Click(object sender, RoutedEventArgs e)
+    /// <summary>
+    /// 智能扫描固件 - 选择目录后自动识别BOOT和APP固件
+    /// </summary>
+    private async void SmartScanFirmware_Click(object sender, RoutedEventArgs e)
     {
         try
         {
-            AutoSearchBootButton.IsEnabled = false;
-            ShowStatus("正在搜索BOOT固件...", PackIconKind.FileSearch);
+            // 选择扫描目录
+            var dialog = new System.Windows.Forms.FolderBrowserDialog
+            {
+                Description = "选择要扫描的固件目录",
+                ShowNewFolderButton = false,
+                UseDescriptionForTitle = true
+            };
+            
+            if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK)
+                return;
+            
+            string scanPath = dialog.SelectedPath;
+            
+            SmartScanButton.IsEnabled = false;
+            ShowStatus("正在智能扫描固件...", PackIconKind.FolderSearchOutline);
+            LogMessage($"开始智能扫描目录: {scanPath}");
             
             if (_firmwareService == null)
             {
                 LogMessage("固件服务未初始化", LogLevel.Error);
-                ShowStatus("无法搜索BOOT固件：服务未初始化", PackIconKind.Error);
+                ShowStatus("无法扫描固件：服务未初始化", PackIconKind.Error);
                 return;
             }
             
-            // 获取所有BOOT固件
-            var firmwareList = await _firmwareService.FindAllFirmwareFilesAsync(FirmwareType.Boot);
+            // 执行智能扫描
+            var (bootFiles, appFiles) = await _firmwareService.SmartScanFirmwareAsync(scanPath);
             
-            if (firmwareList.Count > 0)
+            // 更新BOOT固件列表
+            if (bootFiles.Count > 0)
             {
-                // 绑定固件列表到ListView
-                BootFirmwareListView.ItemsSource = firmwareList;
-                
-                // 默认选择第一个固件（按修改日期排序，所以这是最新的）
+                BootFirmwareListView.ItemsSource = bootFiles;
                 BootFirmwareListView.SelectedIndex = 0;
-                
-                // 自动选中的固件通过SelectionChanged事件处理
-                ShowStatus($"找到{firmwareList.Count}个BOOT固件", PackIconKind.CheckCircle);
-                LogMessage($"自动搜索到{firmwareList.Count}个BOOT固件，已选择最新的: {firmwareList[0].FileName}");
+                LogMessage($"智能识别到 {bootFiles.Count} 个BOOT固件，已选择最新的: {bootFiles[0].FileName}");
             }
             else
             {
-                ShowStatus("未找到BOOT固件", PackIconKind.FileAlertOutline);
-                LogMessage("未找到BOOT固件", LogLevel.Warning);
-                
-                // 清空ListView
                 BootFirmwareListView.ItemsSource = null;
                 ClearBootFirmware();
-            }
-        }
-        catch (Exception ex)
-        {
-            LogMessage($"自动搜索BOOT固件时出错: {ex.Message}", LogLevel.Error);
-            ShowStatus("搜索BOOT固件出错", PackIconKind.AlertCircle);
-        }
-        finally
-        {
-            AutoSearchBootButton.IsEnabled = true;
-        }
-    }
-    
-    private async void AutoSearchAppFile_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            AutoSearchAppButton.IsEnabled = false;
-            ShowStatus("正在搜索APP固件...", PackIconKind.FileSearch);
-            
-            if (_firmwareService == null)
-            {
-                LogMessage("固件服务未初始化", LogLevel.Error);
-                ShowStatus("无法搜索APP固件：服务未初始化", PackIconKind.Error);
-                return;
+                LogMessage("未识别到BOOT固件", LogLevel.Warning);
             }
             
-            // 获取所有APP固件
-            var firmwareList = await _firmwareService.FindAllFirmwareFilesAsync(FirmwareType.App);
-            
-            if (firmwareList.Count > 0)
+            // 更新APP固件列表
+            if (appFiles.Count > 0)
             {
-                // 绑定固件列表到ListView
-                AppFirmwareListView.ItemsSource = firmwareList;
-                
-                // 默认选择第一个固件（按修改日期排序，所以这是最新的）
+                AppFirmwareListView.ItemsSource = appFiles;
                 AppFirmwareListView.SelectedIndex = 0;
-                
-                // 自动选中的固件通过SelectionChanged事件处理
-                ShowStatus($"找到{firmwareList.Count}个APP固件", PackIconKind.CheckCircle);
-                LogMessage($"自动搜索到{firmwareList.Count}个APP固件，已选择最新的: {firmwareList[0].FileName}");
+                LogMessage($"智能识别到 {appFiles.Count} 个APP固件，已选择最新的: {appFiles[0].FileName}");
             }
             else
             {
-                ShowStatus("未找到APP固件", PackIconKind.FileAlertOutline);
-                LogMessage("未找到APP固件", LogLevel.Warning);
-                
-                // 清空ListView
                 AppFirmwareListView.ItemsSource = null;
                 ClearAppFirmware();
+                LogMessage("未识别到APP固件", LogLevel.Warning);
+            }
+            
+            // 显示扫描结果
+            string resultMsg = $"扫描完成: BOOT {bootFiles.Count}个, APP {appFiles.Count}个";
+            ShowStatus(resultMsg, bootFiles.Count > 0 || appFiles.Count > 0 ? PackIconKind.CheckCircle : PackIconKind.AlertCircle);
+            
+            if (bootFiles.Count == 0 && appFiles.Count == 0)
+            {
+                System.Windows.MessageBox.Show(
+                    "未找到符合命名规则的固件文件。\n\n" +
+                    "BOOT文件关键词: BOOT, BOOTLOADER, BL_, BOOTSTRAP, UBOOT, LOADER, STARTUP\n" +
+                    "APP文件关键词: APP, APPLICATION, MAIN, FIRMWARE, FW_, PROGRAM, USER, APPL\n\n" +
+                    "请确保固件文件名包含上述关键词。",
+                    "扫描结果", MessageBoxButton.OK, MessageBoxImage.Information);
             }
         }
         catch (Exception ex)
         {
-            LogMessage($"自动搜索APP固件时出错: {ex.Message}", LogLevel.Error);
-            ShowStatus("搜索APP固件出错", PackIconKind.AlertCircle);
+            LogMessage($"智能扫描固件时出错: {ex.Message}", LogLevel.Error);
+            ShowStatus("扫描固件出错", PackIconKind.AlertCircle);
         }
         finally
         {
-            AutoSearchAppButton.IsEnabled = true;
+            SmartScanButton.IsEnabled = true;
         }
     }
     
@@ -2712,8 +2699,7 @@ public partial class MainWindow : Window
         RefreshConnectionButton.IsEnabled = enabled;
         SelectBootButton.IsEnabled = enabled;
         SelectAppButton.IsEnabled = enabled;
-        AutoSearchBootButton.IsEnabled = enabled;
-        AutoSearchAppButton.IsEnabled = enabled;
+        SmartScanButton.IsEnabled = enabled;
         BurnBootButton.IsEnabled = enabled && _bootFirmware != null && _bootFirmware.IsValid;
         BurnAppButton.IsEnabled = enabled && _appFirmware != null && _appFirmware.IsValid;
         BurnAllButton.IsEnabled = enabled && _bootFirmware != null && _bootFirmware.IsValid 

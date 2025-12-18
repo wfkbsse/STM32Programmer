@@ -5,12 +5,14 @@
         Title="智能自动烧录" 
         Icon="IC.png"
         Height="580" Width="950"
+        MinHeight="400" MinWidth="600"
         WindowStartupLocation="CenterScreen"
         WindowStyle="None"
         AllowsTransparency="True"
         Background="Transparent"
         ResizeMode="CanResizeWithGrip"
         Closing="Window_Closing"
+        SizeChanged="Window_SizeChanged"
         MouseLeftButtonDown="Window_MouseLeftButtonDown">
     
     <Window.Resources>
@@ -43,8 +45,11 @@
         </Style>
     </Window.Resources>
     
-    <!-- 主容器 - 圆角悬浮效果 -->
-    <Border CornerRadius="16" Background="#F0F2F5" BorderThickness="1" BorderBrush="#D0D0D0">
+    <!-- 主容器 - 圆角悬浮效果，使用LayoutTransform实现清晰缩放 -->
+    <Border x:Name="MainBorder" CornerRadius="16" Background="#F0F2F5" BorderThickness="1" BorderBrush="#D0D0D0">
+        <Border.LayoutTransform>
+            <ScaleTransform x:Name="ContentScale" ScaleX="1" ScaleY="1"/>
+        </Border.LayoutTransform>
         <Border.Effect>
             <DropShadowEffect BlurRadius="25" ShadowDepth="8" Opacity="0.35" Color="#000000"/>
         </Border.Effect>
@@ -54,7 +59,7 @@
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="Auto"/>
-            </Grid.RowDefinitions>
+                </Grid.RowDefinitions>
             
             <!-- 顶部标题栏 -->
             <Border Grid.Row="0" Background="#1A73E8" CornerRadius="16,16,0,0" Padding="16,10">
@@ -84,11 +89,18 @@
                         </StackPanel>
                     </Button>
                     
-                    <Button x:Name="CloseWindowButton" Grid.Column="3" Click="CloseButton_Click"
-                          Style="{StaticResource MaterialDesignFlatButton}"
-                          Foreground="White" Width="30" Height="30" Padding="0" Margin="8,0,0,0" ToolTip="关闭窗口">
-                        <materialDesign:PackIcon Kind="Close" Width="18" Height="18"/>
-                    </Button>
+                    <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="8,0,0,0">
+                        <Button x:Name="MaximizeButton" Click="MaximizeButton_Click"
+                              Style="{StaticResource MaterialDesignFlatButton}"
+                              Foreground="White" Width="30" Height="30" Padding="0" ToolTip="最大化/还原">
+                            <materialDesign:PackIcon x:Name="MaximizeIcon" Kind="WindowMaximize" Width="16" Height="16"/>
+                        </Button>
+                        <Button x:Name="CloseWindowButton" Click="CloseButton_Click"
+                              Style="{StaticResource MaterialDesignFlatButton}"
+                              Foreground="White" Width="30" Height="30" Padding="0" ToolTip="关闭窗口">
+                            <materialDesign:PackIcon Kind="Close" Width="18" Height="18"/>
+                        </Button>
+                    </StackPanel>
                 </Grid>
             </Border>
             
@@ -99,10 +111,17 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 
-                <!-- 左侧面板 -->
-                <StackPanel Grid.Column="0">
+                <!-- 左侧面板 - 使用Grid让日志区域自动填充 -->
+                <Grid Grid.Column="0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    
                     <!-- 统计卡片 -->
-                    <Border Style="{StaticResource CompactCardStyle}">
+                    <Border Grid.Row="0" Style="{StaticResource CompactCardStyle}">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
@@ -128,7 +147,7 @@
                     </Border>
                     
                     <!-- BOOT固件信息 -->
-                    <Border Style="{StaticResource CompactCardStyle}" Background="#FFF8E1">
+                    <Border Grid.Row="1" Style="{StaticResource CompactCardStyle}" Background="#FFF8E1">
                         <StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                                 <materialDesign:PackIcon Kind="Flash" Width="16" Height="16" Foreground="#FF9800"/>
@@ -148,7 +167,7 @@
                     </Border>
                     
                     <!-- APP固件信息 -->
-                    <Border Style="{StaticResource CompactCardStyle}" Background="#E3F2FD">
+                    <Border Grid.Row="2" Style="{StaticResource CompactCardStyle}" Background="#E3F2FD">
                         <StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                                 <materialDesign:PackIcon Kind="Application" Width="16" Height="16" Foreground="#2196F3"/>
@@ -167,8 +186,8 @@
                         </StackPanel>
                     </Border>
                     
-                    <!-- 操作日志 -->
-                    <Border Style="{StaticResource CompactCardStyle}" Margin="4,4,4,4">
+                    <!-- 操作日志 - 自动填充剩余高度 -->
+                    <Border Grid.Row="3" Style="{StaticResource CompactCardStyle}" Margin="4,4,4,4">
                         <DockPanel>
                             <Grid DockPanel.Dock="Top" Margin="0,0,0,6">
                                 <TextBlock Text="操作日志" FontWeight="Medium" FontSize="12"/>
@@ -181,14 +200,14 @@
                                     </StackPanel>
                                 </Button>
                             </Grid>
-                            <Border BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="4" Background="#FAFAFA" MaxHeight="150">
+                            <Border BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="4" Background="#FAFAFA">
                                 <ScrollViewer x:Name="LogScrollViewer" VerticalScrollBarVisibility="Auto">
                                     <TextBlock x:Name="LogTextBlock" Text="" Padding="8" FontFamily="Consolas" FontSize="10" TextWrapping="Wrap"/>
                                 </ScrollViewer>
                             </Border>
                         </DockPanel>
                     </Border>
-                </StackPanel>
+                </Grid>
                 
                 <!-- 右侧面板 - 两个独立容器 -->
                 <Grid Grid.Column="1" Margin="8,0,0,0">
@@ -281,15 +300,46 @@
                             
                             <!-- 当前阶段文字 -->
                             <TextBlock x:Name="CurrentStepText" Text="等待连接..." FontSize="13" FontWeight="Medium" 
-                                     HorizontalAlignment="Center" Foreground="#1A73E8" Margin="0,0,0,10"/>
+                                     HorizontalAlignment="Center" Foreground="#1A73E8" Margin="0,0,0,12"/>
                             
-                            <!-- 总进度条 -->
-                            <Grid>
-                                <ProgressBar x:Name="CurrentProgressBar" Height="10" Minimum="0" Maximum="100" Value="0"
-                                           Foreground="#1976D2" Background="#E3F2FD"
-                                           Style="{StaticResource MaterialDesignLinearProgressBar}"/>
-                                <TextBlock x:Name="ProgressText" Text="0%" FontSize="11" FontWeight="Bold" 
-                                         HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#333333"/>
+                            <!-- 立体进度条 -->
+                            <Grid Height="32" Margin="0,4,0,0">
+                                <!-- 外层阴影边框 -->
+                                <Border CornerRadius="16" Background="#E0E0E0">
+                                    <Border.Effect>
+                                        <DropShadowEffect BlurRadius="4" ShadowDepth="2" Direction="270" Opacity="0.2" Color="#000000"/>
+                                    </Border.Effect>
+                                </Border>
+                                <!-- 内凹效果背景 -->
+                                <Border CornerRadius="16" Margin="2" Background="#F5F5F5">
+                                    <Border.Effect>
+                                        <DropShadowEffect BlurRadius="3" ShadowDepth="1" Direction="90" Opacity="0.15" Color="#000000"/>
+                                    </Border.Effect>
+                                </Border>
+                                <!-- 进度条轨道 -->
+                                <Border x:Name="ProgressTrack" CornerRadius="14" Margin="3" Background="#E3F2FD"/>
+                                <!-- 进度条填充 -->
+                                <Border x:Name="ProgressFill" CornerRadius="14" Margin="3" HorizontalAlignment="Left" Width="0">
+                                    <Border.Background>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                            <GradientStop Color="#42A5F5" Offset="0"/>
+                                            <GradientStop Color="#1976D2" Offset="0.5"/>
+                                            <GradientStop Color="#1565C0" Offset="1"/>
+                                        </LinearGradientBrush>
+                                    </Border.Background>
+                                    <Border.Effect>
+                                        <DropShadowEffect BlurRadius="6" ShadowDepth="0" Opacity="0.4" Color="#1976D2"/>
+                                    </Border.Effect>
+                                </Border>
+                                <!-- 进度百分比文字 -->
+                                <TextBlock x:Name="ProgressText" Text="0%" FontSize="14" FontWeight="Bold" 
+                                         HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#333333">
+                                    <TextBlock.Effect>
+                                        <DropShadowEffect BlurRadius="2" ShadowDepth="0" Opacity="0.3" Color="White"/>
+                                    </TextBlock.Effect>
+                                </TextBlock>
+                                <!-- 隐藏的原始进度条用于数据绑定 -->
+                                <ProgressBar x:Name="CurrentProgressBar" Visibility="Hidden" Minimum="0" Maximum="100" Value="0"/>
                             </Grid>
                         </StackPanel>
                     </Border>

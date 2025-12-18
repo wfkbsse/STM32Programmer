@@ -26,6 +26,7 @@
     <Resource Include="logo.png" />
     <Resource Include="IC.png" />
     <Resource Include="IC.ico" />
+    <Resource Include="wx.jpg" />
   </ItemGroup>
 
 </Project>

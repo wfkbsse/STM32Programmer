@@ -9,6 +9,135 @@ namespace STM32Programmer.Services
     {
         public event EventHandler<string>? LogMessage;
         private string _defaultSearchPath;
+        
+        /// <summary>
+        /// 安全地递归搜索文件，跳过无权限访问的目录
+        /// </summary>
+        private IEnumerable<string> SafeGetFiles(string path, string searchPattern)
+        {
+            var files = new List<string>();
+            
+            try
+            {
+                // 获取当前目录的文件
+                files.AddRange(Directory.GetFiles(path, searchPattern));
+            }
+            catch (UnauthorizedAccessException) { }
+            catch (PathTooLongException) { }
+            catch (DirectoryNotFoundException) { }
+            catch (IOException) { }
+            
+            try
+            {
+                // 递归搜索子目录
+                foreach (var dir in Directory.GetDirectories(path))
+                {
+                    try
+                    {
+                        files.AddRange(SafeGetFiles(dir, searchPattern));
+                    }
+                    catch (UnauthorizedAccessException) { }
+                    catch (PathTooLongException) { }
+                    catch (DirectoryNotFoundException) { }
+                    catch (IOException) { }
+                }
+            }
+            catch (UnauthorizedAccessException) { }
+            catch (PathTooLongException) { }
+            catch (DirectoryNotFoundException) { }
+            catch (IOException) { }
+            
+            return files;
+        }
+        
+        // BOOT文件识别关键词
+        private static readonly string[] BootKeywords = new[] 
+        { 
+            "BOOT", "BOOTLOADER", "BL_", "BOOTSTRAP", "UBOOT", "U-BOOT", "LOADER", "STARTUP" 
+        };
+        
+        // APP文件识别关键词
+        private static readonly string[] AppKeywords = new[] 
+        { 
+            "APP", "APPLICATION", "MAIN", "FIRMWARE", "FW_", "PROGRAM", "USER", "APPL" 
+        };
+        
+        /// <summary>
+        /// 根据文件名智能识别固件类型
+        /// </summary>
+        private FirmwareType? IdentifyFirmwareType(string filename)
+        {
+            string upperName = filename.ToUpper();
+            
+            // 先检查BOOT关键词
+            foreach (var keyword in BootKeywords)
+            {
+                if (upperName.Contains(keyword))
+                    return FirmwareType.Boot;
+            }
+            
+            // 再检查APP关键词
+            foreach (var keyword in AppKeywords)
+            {
+                if (upperName.Contains(keyword))
+                    return FirmwareType.App;
+            }
+            
+            return null;
+        }
+        
+        /// <summary>
+        /// 智能扫描目录，自动识别BOOT和APP固件
+        /// </summary>
+        public async Task<(List<FirmwareFile> bootFiles, List<FirmwareFile> appFiles)> SmartScanFirmwareAsync(string scanPath)
+        {
+            return await Task.Run(() =>
+            {
+                var bootFiles = new List<FirmwareFile>();
+                var appFiles = new List<FirmwareFile>();
+                
+                try
+                {
+                    LogMessage?.Invoke(this, $"开始智能扫描目录: {scanPath}");
+                    
+                    // 获取所有固件文件
+                    var allFiles = SafeGetFiles(scanPath, "*.bin")
+                        .Concat(SafeGetFiles(scanPath, "*.hex"))
+                        .ToList();
+                    
+                    LogMessage?.Invoke(this, $"找到 {allFiles.Count} 个固件文件");
+                    
+                    foreach (var filePath in allFiles)
+                    {
+                        var fileName = Path.GetFileName(filePath);
+                        var firmwareType = IdentifyFirmwareType(fileName);
+                        
+                        if (firmwareType.HasValue)
+                        {
+                            var firmware = new FirmwareFile(filePath, firmwareType.Value);
+                            ValidateFirmware(firmware);
+                            
+                            if (firmwareType.Value == FirmwareType.Boot)
+                                bootFiles.Add(firmware);
+                            else
+                                appFiles.Add(firmware);
+                        }
+                    }
+                    
+                    // 按修改时间排序，最新的在前
+                    bootFiles = bootFiles.OrderByDescending(f => f.LastModified).ToList();
+                    appFiles = appFiles.OrderByDescending(f => f.LastModified).ToList();
+                    
+                    LogMessage?.Invoke(this, $"智能识别结果: BOOT文件 {bootFiles.Count} 个, APP文件 {appFiles.Count} 个");
+                }
+                catch (Exception ex)
+                {
+                    LogMessage?.Invoke(this, $"智能扫描出错: {ex.Message}");
+                }
+                
+                return (bootFiles, appFiles);
+            });
+        }
 
         public FirmwareService()
         {
@@ -74,9 +203,9 @@ namespace STM32Programmer.Services
                     // 搜索关键字
                     var keyword = type == FirmwareType.Boot ? "boot" : "app";
                     
-                    // 查找所有匹配的文件
-                    var files = Directory.GetFiles(searchPath, "*.bin", SearchOption.AllDirectories)
-                        .Concat(Directory.GetFiles(searchPath, "*.hex", SearchOption.AllDirectories))
+                    // 查找所有匹配的文件（使用安全搜索方法，跳过无权限目录）
+                    var files = SafeGetFiles(searchPath, "*.bin")
+                        .Concat(SafeGetFiles(searchPath, "*.hex"))
                         .Where(f => Path.GetFileName(f).ToLower().Contains(keyword))
                         .Select(f => new FileInfo(f))
                         .OrderByDescending(f => f.LastWriteTime)
@@ -245,9 +374,9 @@ namespace STM32Programmer.Services
                     // 搜索关键字
                     var keyword = type == FirmwareType.Boot ? "boot" : "app";
                     
-                    // 查找所有匹配的文件
-                    var files = Directory.GetFiles(searchPath, "*.bin", SearchOption.AllDirectories)
-                        .Concat(Directory.GetFiles(searchPath, "*.hex", SearchOption.AllDirectories))
+                    // 查找所有匹配的文件（使用安全搜索方法，跳过无权限目录）
+                    var files = SafeGetFiles(searchPath, "*.bin")
+                        .Concat(SafeGetFiles(searchPath, "*.hex"))
                         .Where(f => Path.GetFileName(f).ToLower().Contains(keyword))
                         .Select(f => new FileInfo(f))
                         .OrderByDescending(f => f.LastWriteTime)

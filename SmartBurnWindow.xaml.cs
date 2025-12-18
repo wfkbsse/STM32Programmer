@@ -151,7 +151,21 @@ namespace STM32Programmer
             {
                 CurrentProgressBar.Value = value;
                 ProgressText.Text = $"{value}%";
+                UpdateProgressFillWidth(value);
             });
+        }
+        
+        // 更新立体进度条填充宽度
+        private void UpdateProgressFillWidth(double percentage)
+        {
+            if (ProgressTrack != null && ProgressFill != null)
+            {
+                double trackWidth = ProgressTrack.ActualWidth;
+                if (trackWidth > 0)
+                {
+                    ProgressFill.Width = trackWidth * (percentage / 100.0);
+                }
+            }
         }
         
         // 更新BOOT进度
@@ -165,6 +179,7 @@ namespace STM32Programmer
                 int totalProgress = 25 + value / 4;
                 CurrentProgressBar.Value = totalProgress;
                 ProgressText.Text = $"{totalProgress}%";
+                UpdateProgressFillWidth(totalProgress);
                 
                 // 更新步骤指示器
                 UpdateStepIndicator(2, value == 100 ? StepState.Completed : StepState.InProgress);
@@ -183,6 +198,7 @@ namespace STM32Programmer
                 int totalProgress = 50 + value / 2;
                 CurrentProgressBar.Value = totalProgress;
                 ProgressText.Text = $"{totalProgress}%";
+                UpdateProgressFillWidth(totalProgress);
                 
                 // 更新步骤指示器
                 UpdateStepIndicator(3, value == 100 ? StepState.Completed : StepState.InProgress);
@@ -262,6 +278,7 @@ namespace STM32Programmer
             
             CurrentProgressBar.Value = 0;
             ProgressText.Text = "0%";
+            UpdateProgressFillWidth(0);
         }
         
         // 设置烧录完成状态
@@ -274,6 +291,7 @@ namespace STM32Programmer
                     UpdateStepIndicator(4, StepState.Completed);
                     CurrentProgressBar.Value = 100;
                     ProgressText.Text = "100%";
+                    UpdateProgressFillWidth(100);
                     CurrentStepText.Text = "烧录完成！请移除电路板";
                 }
                 else
@@ -336,13 +354,67 @@ namespace STM32Programmer
             LogTextBlock.Text = "";
         }
         
-        // 窗口拖动
+        // 窗口拖动和双击最大化
         private void Window_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
-            if (e.ButtonState == System.Windows.Input.MouseButtonState.Pressed)
+            if (e.ClickCount == 2)
             {
+                // 双击标题栏最大化/还原
+                MaximizeButton_Click(sender, e);
+            }
+            else if (e.ButtonState == System.Windows.Input.MouseButtonState.Pressed)
+            {
+                // 如果是最大化状态，先还原再拖动
+                if (this.WindowState == WindowState.Maximized)
+                {
+                    // 获取鼠标相对于窗口的位置比例
+                    var point = e.GetPosition(this);
+                    var ratioX = point.X / this.ActualWidth;
+                    
+                    this.WindowState = WindowState.Normal;
+                    MaximizeIcon.Kind = MaterialDesignThemes.Wpf.PackIconKind.WindowMaximize;
+                    
+                    // 调整窗口位置使鼠标保持在相对位置
+                    this.Left = System.Windows.Forms.Cursor.Position.X - (this.Width * ratioX);
+                    this.Top = System.Windows.Forms.Cursor.Position.Y - 20;
+                }
                 this.DragMove();
             }
+        }
+        
+        // 最大化/还原按钮
+        private void MaximizeButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (this.WindowState == WindowState.Maximized)
+            {
+                this.WindowState = WindowState.Normal;
+                MaximizeIcon.Kind = MaterialDesignThemes.Wpf.PackIconKind.WindowMaximize;
+            }
+            else
+            {
+                this.WindowState = WindowState.Maximized;
+                MaximizeIcon.Kind = MaterialDesignThemes.Wpf.PackIconKind.WindowRestore;
+            }
+        }
+        
+        // 基准窗口尺寸
+        private const double BaseWidth = 950;
+        private const double BaseHeight = 580;
+        
+        // 窗口大小改变 - 使用LayoutTransform实现清晰缩放
+        private void Window_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            // 计算缩放比例，保持等比例
+            double scaleX = this.ActualWidth / BaseWidth;
+            double scaleY = this.ActualHeight / BaseHeight;
+            double scale = Math.Min(scaleX, scaleY);
+            
+            // 限制最小缩放比例
+            scale = Math.Max(0.5, scale);
+            
+            // 应用缩放
+            ContentScale.ScaleX = scale;
+            ContentScale.ScaleY = scale;
         }
         
         // 关闭按钮

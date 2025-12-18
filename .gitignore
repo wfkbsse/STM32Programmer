@@ -1,0 +1,41 @@
+# Build results
+bin/
+obj/
+publish/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Build outputs
+*.exe
+*.dll
+*.pdb
+*.msi
+*.zip
+*.wixpdb
+
+# Installer temp files
+installer/*.bmp
+
+# Logs
+*.log
+install_log.txt
+
+# Temp files
+temp_*.txt
+untitle.txt
+
+# Documentation (generated)
+*_Summary.md
+*_Feature.md
+*_Complete.md
+*_Report.md
+*_Applied.md
+QUICK_*.md
+BEFORE_AFTER*.md
+IOException_Fix.md
+CompilationFixes_Summary.md

@@ -94,10 +94,8 @@
             </Component>
         </ComponentGroup>
         
-        <ComponentGroup Id="RuntimeComponents" Directory="Net80Folder">
-            <Component Id="RuntimeIOPorts" Guid="*">
-                <File Id="RuntimeIOPorts" Source="$(var.PublishDir)\runtimes\win\lib\net8.0\System.IO.Ports.dll" KeyPath="yes" />
-            </Component>
+        <!-- win-x64 构建不需要单独的运行时组件 -->
+        <ComponentGroup Id="RuntimeComponents" Directory="INSTALLFOLDER">
         </ComponentGroup>
         
         <!-- 开始菜单快捷方式 -->

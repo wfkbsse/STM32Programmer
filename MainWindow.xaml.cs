@@ -82,20 +82,20 @@ public partial class MainWindow : Window
                     // 初始化日志服务
                     _logService = new LogService();
         
-        // 初始化服务
-        _deviceService = new DeviceService();
-        _firmwareService = new FirmwareService();
-        _serialBurnService = new SerialBurnService(_logService);
+                    // 初始化服务
+                    _deviceService = new DeviceService();
+                    _firmwareService = new FirmwareService();
+                    _serialBurnService = new SerialBurnService(_logService);
         
-        // 注册日志事件
-        if (_logService != null)
-        {
-            _logService.LogMessageAdded += OnExternalLogMessage;
-        }
+                    // 注册日志事件
+                    if (_logService != null)
+                    {
+                        _logService.LogMessageAdded += OnExternalLogMessage;
+                    }
         
                     if (_deviceService != null)
                     {
-        _deviceService.ShowConnectionLogs = false;  // 不显示连接刷新日志
+                        _deviceService.ShowConnectionLogs = false;  // 不显示连接刷新日志
                         _deviceService.LogMessage += OnExternalLogMessage;
                         _deviceService.DeviceStatusChanged += OnDeviceStatusChanged; // 订阅设备状态变化事件
                     }
@@ -106,21 +106,21 @@ public partial class MainWindow : Window
                     }
                     
                     // 设置日志UI绑定
-        if (_logService != null && OperationLogTextBox != null)
+                    if (_logService != null && OperationLogTextBox != null)
                     {
                         // 只绑定操作日志
                         OperationLogTextBox.ItemsSource = _logService.OperationLogEntries;
                     }
         
-        // 初始化设备状态
-        _currentDevice = new STLinkDevice();
+                    // 初始化设备状态
+                    _currentDevice = new STLinkDevice();
         
-        // 设置定时刷新连接状态
-        _connectionTimer = new DispatcherTimer
-        {
-            Interval = TimeSpan.FromSeconds(5)
-        };
-        _connectionTimer.Tick += async (s, e) => await RefreshConnectionStatusAsync();
+                    // 设置定时刷新连接状态
+                    _connectionTimer = new DispatcherTimer
+                    {
+                        Interval = TimeSpan.FromSeconds(5)
+                    };
+                    _connectionTimer.Tick += async (s, e) => await RefreshConnectionStatusAsync();
         
                 // 在窗口加载完成后再初始化UI
                 this.Loaded += MainWindow_Loaded;
@@ -727,7 +727,7 @@ public partial class MainWindow : Window
             while (!cancellationToken.IsCancellationRequested)
             {
                 // 检查连接状态
-                var device = await _deviceService.CheckConnectionAsync();
+                var device = await _deviceService!.CheckConnectionAsync();
                 bool isConnected = device.Status == ConnectionStatus.Connected && device.IsChipConnected;
                 
                 // 状态变化：从未连接到已连接
@@ -2430,7 +2430,7 @@ public partial class MainWindow : Window
         if (_isNavCollapsed)
         {
             // 收起导航栏
-            NavigationRail.Width = 60;
+            NavigationRail.Width = 80;
             ToggleNavIcon.Kind = PackIconKind.ChevronRight;
             NavLogo.Visibility = Visibility.Collapsed;
             
@@ -2440,11 +2440,17 @@ public partial class MainWindow : Window
             LogViewNavText.Visibility = Visibility.Collapsed;
             AboutNavText.Visibility = Visibility.Collapsed;
             
-            // 调整按钮宽度
-            FirmwareNavButton.Width = 50;
-            SettingsNavButton.Width = 50;
-            LogViewNavButton.Width = 50;
-            AboutNavButton.Width = 50;
+            // 调整按钮宽度和图标居中
+            FirmwareNavButton.Width = 60;
+            SettingsNavButton.Width = 60;
+            LogViewNavButton.Width = 60;
+            AboutNavButton.Width = 60;
+            
+            // 调整图标Margin使其居中
+            FirmwareNavIcon.Margin = new Thickness(0);
+            SettingsNavIcon.Margin = new Thickness(0);
+            LogViewNavIcon.Margin = new Thickness(0);
+            AboutNavIcon.Margin = new Thickness(0);
         }
         else
         {
@@ -2464,6 +2470,12 @@ public partial class MainWindow : Window
             SettingsNavButton.Width = 140;
             LogViewNavButton.Width = 140;
             AboutNavButton.Width = 140;
+            
+            // 恢复图标Margin
+            FirmwareNavIcon.Margin = new Thickness(8, 0, 12, 0);
+            SettingsNavIcon.Margin = new Thickness(8, 0, 12, 0);
+            LogViewNavIcon.Margin = new Thickness(8, 0, 12, 0);
+            AboutNavIcon.Margin = new Thickness(8, 0, 12, 0);
         }
     }
     
@@ -3277,7 +3289,7 @@ public partial class MainWindow : Window
             ComPortComboBox.Items.Clear();
             
             // 获取系统中所有可用的串口
-            string[] ports = null;
+            string[]? ports = null;
             try
             {
                 ports = System.IO.Ports.SerialPort.GetPortNames();

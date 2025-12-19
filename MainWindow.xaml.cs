@@ -611,13 +611,7 @@ public partial class MainWindow : Window
     
     private async Task StartSmartBurnAsync()
     {
-        // 检查固件是否已选择
-        if (_bootFirmware == null || !_bootFirmware.IsValid)
-        {
-            System.Windows.MessageBox.Show("请先选择有效的BOOT固件", "提示", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-        
+        // APP固件必须选择
         if (_appFirmware == null || !_appFirmware.IsValid)
         {
             System.Windows.MessageBox.Show("请先选择有效的APP固件", "提示", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -632,23 +626,60 @@ public partial class MainWindow : Window
         
         // 创建并显示智能烧录窗口
         _smartBurnWindow = new SmartBurnWindow();
-        _smartBurnWindow.SetFirmwareInfo(
-            _bootFirmware.FileName,
-            _bootFirmware.FileSize,
-            _bootFirmware.FilePath,
-            _bootFirmware.LastModified,
-            "0x08000000",  // BOOT默认烧录地址
-            _appFirmware.FileName,
-            _appFirmware.FileSize,
-            _appFirmware.FilePath,
-            _appFirmware.LastModified,
-            "0x08010000"   // APP默认烧录地址
-        );
+        
+        // 根据是否有BOOT固件设置信息
+        bool hasBootFirmware = _bootFirmware != null && _bootFirmware.IsValid;
+        
+        if (hasBootFirmware)
+        {
+            _smartBurnWindow.SetFirmwareInfo(
+                _bootFirmware!.FileName,
+                _bootFirmware.FileSize,
+                _bootFirmware.FilePath,
+                _bootFirmware.LastModified,
+                "0x08000000",  // BOOT默认烧录地址
+                _appFirmware.FileName,
+                _appFirmware.FileSize,
+                _appFirmware.FilePath,
+                _appFirmware.LastModified,
+                "0x08010000"   // APP默认烧录地址
+            );
+        }
+        else
+        {
+            // 仅APP模式
+            _smartBurnWindow.SetFirmwareInfo(
+                "-",
+                0,
+                "-",
+                DateTime.MinValue,
+                "-",
+                _appFirmware.FileName,
+                _appFirmware.FileSize,
+                _appFirmware.FilePath,
+                _appFirmware.LastModified,
+                "0x08010000"   // APP默认烧录地址
+            );
+        }
+        
         _smartBurnWindow.StopRequested += (s, e) => StopSmartBurn();
         _smartBurnWindow.AddLog("智能自动烧录已启动");
-        _smartBurnWindow.AddLog($"BOOT固件: {_bootFirmware.FileName} ({_bootFirmware.FileSize / 1024} KB)");
+        
+        if (hasBootFirmware)
+        {
+            _smartBurnWindow.AddLog($"烧录模式: BOOT + APP");
+            _smartBurnWindow.AddLog($"BOOT固件: {_bootFirmware!.FileName} ({_bootFirmware.FileSize / 1024} KB)");
+        }
+        else
+        {
+            _smartBurnWindow.AddLog($"烧录模式: 仅 APP");
+        }
         _smartBurnWindow.AddLog($"APP固件: {_appFirmware.FileName} ({_appFirmware.FileSize / 1024} KB)");
+        
         _smartBurnWindow.Show();
+        
+        // 更新步骤标签
+        _smartBurnWindow.UpdateStepLabels();
         
         // 更新主窗口UI
         UpdateSmartBurnUI(true);
@@ -833,47 +864,61 @@ public partial class MainWindow : Window
     {
         try
         {
-            // 检查固件是否为空
-            if (_bootFirmware == null || _appFirmware == null || _deviceService == null)
+            // 检查APP固件是否为空（必须）
+            if (_appFirmware == null || _deviceService == null)
             {
-                _logService?.LogError("智能烧录", "固件或设备服务未初始化");
+                _logService?.LogError("智能烧录", "APP固件或设备服务未初始化");
                 return false;
             }
             
-            // 烧录BOOT
-            _logService?.LogInfo("智能烧录", "开始烧录BOOT固件...");
-            ShowStatus("正在烧录BOOT固件...", PackIconKind.Flash);
-            _smartBurnWindow?.AddLog("开始烧录BOOT固件");
-            _smartBurnWindow?.UpdateStatus(
-                "烧录BOOT固件",
-                "正在写入BOOT固件到芯片",
-                PackIconKind.Flash,
-                Color.FromRgb(255, 152, 0)
-            );
+            // 获取烧录模式
+            bool burnBootAndApp = _smartBurnWindow?.IsBurnBootAndApp ?? true;
+            bool hasBootFirmware = _bootFirmware != null && _bootFirmware.IsValid;
             
-            var bootProgress = new Progress<int>(value =>
+            // 如果选择了BOOT+APP模式但没有BOOT固件，自动切换到仅APP模式
+            if (burnBootAndApp && !hasBootFirmware)
             {
-                _ = Application.Current.Dispatcher.BeginInvoke(new Action(() =>
+                burnBootAndApp = false;
+                _smartBurnWindow?.AddLog("未选择BOOT固件，自动切换到仅APP模式");
+            }
+            
+            // 烧录BOOT（如果需要）
+            if (burnBootAndApp && hasBootFirmware)
+            {
+                _logService?.LogInfo("智能烧录", "开始烧录BOOT固件...");
+                ShowStatus("正在烧录BOOT固件...", PackIconKind.Flash);
+                _smartBurnWindow?.AddLog("开始烧录BOOT固件");
+                _smartBurnWindow?.UpdateStatus(
+                    "烧录BOOT固件",
+                    "正在写入BOOT固件到芯片",
+                    PackIconKind.Flash,
+                    Color.FromRgb(255, 152, 0)
+                );
+                
+                var bootProgress = new Progress<int>(value =>
                 {
-                    OperationProgressBar.Value = value / 2; // BOOT占50%
-                    ShowStatus($"烧录BOOT: {value}%", PackIconKind.Flash, 0);
-                    _smartBurnWindow?.UpdateBootProgress(value);
-                }));
-            });
-            
-            bool bootSuccess = await _deviceService.ProgramFirmwareAsync(_bootFirmware, bootProgress);
-            
-            if (!bootSuccess || cancellationToken.IsCancellationRequested)
-            {
-                _logService?.LogError("智能烧录", "BOOT固件烧录失败");
-                return false;
+                    _ = Application.Current.Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        OperationProgressBar.Value = value / 2; // BOOT占50%
+                        ShowStatus($"烧录BOOT: {value}%", PackIconKind.Flash, 0);
+                        _smartBurnWindow?.UpdateBootProgress(value);
+                    }));
+                });
+                
+                bool bootSuccess = await _deviceService.ProgramFirmwareAsync(_bootFirmware!, bootProgress);
+                
+                if (!bootSuccess || cancellationToken.IsCancellationRequested)
+                {
+                    _logService?.LogError("智能烧录", "BOOT固件烧录失败");
+                    return false;
+                }
+                
+                _logService?.LogInfo("智能烧录", "BOOT固件烧录成功");
+                _smartBurnWindow?.AddLog("BOOT固件烧录成功");
+                
+                // 短暂延迟
+                await Task.Delay(500, cancellationToken);
             }
-            
-            _logService?.LogInfo("智能烧录", "BOOT固件烧录成功");
-            _smartBurnWindow?.AddLog("BOOT固件烧录成功");
-            
-            // 短暂延迟
-            await Task.Delay(500, cancellationToken);
             
             // 烧录APP
             _logService?.LogInfo("智能烧录", "开始烧录APP固件...");
@@ -890,7 +935,9 @@ public partial class MainWindow : Window
             {
                 _ = Application.Current.Dispatcher.BeginInvoke(new Action(() =>
                 {
-                    OperationProgressBar.Value = 50 + (value / 2); // APP占50%
+                    // 根据模式计算进度
+                    int progressValue = burnBootAndApp ? 50 + (value / 2) : value;
+                    OperationProgressBar.Value = progressValue;
                     ShowStatus($"烧录APP: {value}%", PackIconKind.Flash, 0);
                     _smartBurnWindow?.UpdateAppProgress(value);
                 }));

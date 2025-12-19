@@ -62,46 +62,63 @@
                 </Grid.RowDefinitions>
             
             <!-- 顶部标题栏 -->
-            <Border Grid.Row="0" Background="#1A73E8" CornerRadius="16,16,0,0" Padding="16,10">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    
-                    <StackPanel Grid.Column="0" Orientation="Horizontal">
-                        <materialDesign:PackIcon Kind="AutoFix" Width="26" Height="26" Foreground="White" VerticalAlignment="Center"/>
-                        <TextBlock Text="智能自动烧录 - 工业模式" FontSize="16" FontWeight="Bold" Foreground="White" Margin="10,0,0,0" VerticalAlignment="Center"/>
-                    </StackPanel>
-                    
-                    <TextBlock x:Name="StatusText" Grid.Column="1" Text="运行中..." FontSize="13" Foreground="#FFFFFFCC" 
-                             HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,16,0"/>
-                    
-                    <Button x:Name="StopButton" Grid.Column="2" Click="StopButton_Click"
-                          Style="{StaticResource MaterialDesignRaisedButton}"
-                          Background="#F44336" Foreground="White" Height="30" Padding="14,0"
-                          materialDesign:ButtonAssist.CornerRadius="15" BorderThickness="0">
-                        <StackPanel Orientation="Horizontal">
-                            <materialDesign:PackIcon Kind="Stop" Width="16" Height="16" Margin="0,0,5,0"/>
-                            <TextBlock Text="停止" FontWeight="Medium" FontSize="12"/>
+            <Border Grid.Row="0" Background="#1A73E8" CornerRadius="16,16,0,0" Padding="16,8">
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        
+                        <StackPanel Grid.Column="0" Orientation="Horizontal">
+                            <materialDesign:PackIcon Kind="AutoFix" Width="26" Height="26" Foreground="White" VerticalAlignment="Center"/>
+                            <TextBlock Text="智能自动烧录 - 工业模式" FontSize="16" FontWeight="Bold" Foreground="White" Margin="10,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
-                    </Button>
+                        
+                        <TextBlock x:Name="StatusText" Grid.Column="1" Text="运行中..." FontSize="13" Foreground="#FFFFFFCC" 
+                                 HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,16,0"/>
+                        
+                        <Button x:Name="StopButton" Grid.Column="2" Click="StopButton_Click"
+                              Style="{StaticResource MaterialDesignRaisedButton}"
+                              Background="#F44336" Foreground="White" Height="30" Padding="14,0"
+                              materialDesign:ButtonAssist.CornerRadius="15" BorderThickness="0">
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="Stop" Width="16" Height="16" Margin="0,0,5,0"/>
+                                <TextBlock Text="停止" FontWeight="Medium" FontSize="12"/>
+                            </StackPanel>
+                        </Button>
+                        
+                        <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="8,0,0,0">
+                            <Button x:Name="MaximizeButton" Click="MaximizeButton_Click"
+                                  Style="{StaticResource MaterialDesignFlatButton}"
+                                  Foreground="White" Width="30" Height="30" Padding="0" ToolTip="最大化/还原">
+                                <materialDesign:PackIcon x:Name="MaximizeIcon" Kind="WindowMaximize" Width="16" Height="16"/>
+                            </Button>
+                            <Button x:Name="CloseWindowButton" Click="CloseButton_Click"
+                                  Style="{StaticResource MaterialDesignFlatButton}"
+                                  Foreground="White" Width="30" Height="30" Padding="0" ToolTip="关闭窗口">
+                                <materialDesign:PackIcon Kind="Close" Width="18" Height="18"/>
+                            </Button>
+                        </StackPanel>
+                    </Grid>
                     
-                    <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="8,0,0,0">
-                        <Button x:Name="MaximizeButton" Click="MaximizeButton_Click"
-                              Style="{StaticResource MaterialDesignFlatButton}"
-                              Foreground="White" Width="30" Height="30" Padding="0" ToolTip="最大化/还原">
-                            <materialDesign:PackIcon x:Name="MaximizeIcon" Kind="WindowMaximize" Width="16" Height="16"/>
-                        </Button>
-                        <Button x:Name="CloseWindowButton" Click="CloseButton_Click"
-                              Style="{StaticResource MaterialDesignFlatButton}"
-                              Foreground="White" Width="30" Height="30" Padding="0" ToolTip="关闭窗口">
-                            <materialDesign:PackIcon Kind="Close" Width="18" Height="18"/>
-                        </Button>
-                    </StackPanel>
-                </Grid>
+                    <!-- 烧录模式选择 -->
+                    <Border Background="#1565C0" CornerRadius="6" Margin="0,8,0,0" Padding="12,6">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <TextBlock Text="烧录模式:" Foreground="White" FontSize="13" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                            <RadioButton x:Name="BurnModeBootApp" Content="BOOT + APP" Foreground="White" 
+                                       GroupName="BurnMode" IsChecked="True" Margin="0,0,20,0"
+                                       Checked="BurnMode_Changed"
+                                       Style="{StaticResource MaterialDesignRadioButton}"/>
+                            <RadioButton x:Name="BurnModeAppOnly" Content="仅 APP" Foreground="White" 
+                                       GroupName="BurnMode"
+                                       Checked="BurnMode_Changed" 
+                                       Style="{StaticResource MaterialDesignRadioButton}"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
             </Border>
             
             <!-- 主内容区 -->
@@ -147,7 +164,7 @@
                     </Border>
                     
                     <!-- BOOT固件信息 -->
-                    <Border Grid.Row="1" Style="{StaticResource CompactCardStyle}" Background="#FFF8E1">
+                    <Border x:Name="BootFirmwarePanel" Grid.Row="1" Style="{StaticResource CompactCardStyle}" Background="#FFF8E1">
                         <StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                                 <materialDesign:PackIcon Kind="Flash" Width="16" Height="16" Foreground="#FF9800"/>
@@ -244,59 +261,8 @@
                             <DropShadowEffect BlurRadius="10" ShadowDepth="2" Opacity="0.15" Color="#000000"/>
                         </Border.Effect>
                         <StackPanel Margin="20,16">
-                            <!-- 步骤指示器 -->
-                            <Grid Margin="0,0,0,12">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="2*"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="2*"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="2*"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-                                
-                                <!-- 步骤1: 连接 -->
-                                <StackPanel Grid.Column="0" HorizontalAlignment="Center">
-                                    <Ellipse x:Name="Step1Circle" Width="28" Height="28" Fill="#E0E0E0" Stroke="#BDBDBD" StrokeThickness="2"/>
-                                    <materialDesign:PackIcon x:Name="Step1Icon" Kind="Check" Width="16" Height="16" Foreground="White" 
-                                                           HorizontalAlignment="Center" Margin="0,-22,0,0" Visibility="Collapsed"/>
-                                    <TextBlock Text="连接" FontSize="10" HorizontalAlignment="Center" Margin="0,4,0,0" Foreground="#616161"/>
-                                </StackPanel>
-                                
-                                <!-- 连接线1 -->
-                                <Border x:Name="Line1" Grid.Column="1" Height="3" Background="#E0E0E0" VerticalAlignment="Center" Margin="0,0,0,14"/>
-                                
-                                <!-- 步骤2: BOOT -->
-                                <StackPanel Grid.Column="2" HorizontalAlignment="Center">
-                                    <Ellipse x:Name="Step2Circle" Width="28" Height="28" Fill="#E0E0E0" Stroke="#BDBDBD" StrokeThickness="2"/>
-                                    <materialDesign:PackIcon x:Name="Step2Icon" Kind="Check" Width="16" Height="16" Foreground="White" 
-                                                           HorizontalAlignment="Center" Margin="0,-22,0,0" Visibility="Collapsed"/>
-                                    <TextBlock x:Name="Step2Text" Text="BOOT" FontSize="10" HorizontalAlignment="Center" Margin="0,4,0,0" Foreground="#616161"/>
-                                </StackPanel>
-                                
-                                <!-- 连接线2 -->
-                                <Border x:Name="Line2" Grid.Column="3" Height="3" Background="#E0E0E0" VerticalAlignment="Center" Margin="0,0,0,14"/>
-                                
-                                <!-- 步骤3: APP -->
-                                <StackPanel Grid.Column="4" HorizontalAlignment="Center">
-                                    <Ellipse x:Name="Step3Circle" Width="28" Height="28" Fill="#E0E0E0" Stroke="#BDBDBD" StrokeThickness="2"/>
-                                    <materialDesign:PackIcon x:Name="Step3Icon" Kind="Check" Width="16" Height="16" Foreground="White" 
-                                                           HorizontalAlignment="Center" Margin="0,-22,0,0" Visibility="Collapsed"/>
-                                    <TextBlock x:Name="Step3Text" Text="APP" FontSize="10" HorizontalAlignment="Center" Margin="0,4,0,0" Foreground="#616161"/>
-                                </StackPanel>
-                                
-                                <!-- 连接线3 -->
-                                <Border x:Name="Line3" Grid.Column="5" Height="3" Background="#E0E0E0" VerticalAlignment="Center" Margin="0,0,0,14"/>
-                                
-                                <!-- 步骤4: 完成 -->
-                                <StackPanel Grid.Column="6" HorizontalAlignment="Center">
-                                    <Ellipse x:Name="Step4Circle" Width="28" Height="28" Fill="#E0E0E0" Stroke="#BDBDBD" StrokeThickness="2"/>
-                                    <materialDesign:PackIcon x:Name="Step4Icon" Kind="Check" Width="16" Height="16" Foreground="White" 
-                                                           HorizontalAlignment="Center" Margin="0,-22,0,0" Visibility="Collapsed"/>
-                                    <TextBlock Text="完成" FontSize="10" HorizontalAlignment="Center" Margin="0,4,0,0" Foreground="#616161"/>
-                                </StackPanel>
-                            </Grid>
+                            <!-- 动态步骤指示器容器 -->
+                            <StackPanel x:Name="StepIndicatorPanel" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,12"/>
                             
                             <!-- 当前阶段文字 -->
                             <TextBlock x:Name="CurrentStepText" Text="等待连接..." FontSize="13" FontWeight="Medium" 

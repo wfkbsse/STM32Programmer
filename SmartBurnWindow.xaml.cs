@@ -24,15 +24,29 @@ namespace STM32Programmer
         private int _successCount = 0;
         private int _failedCount = 0;
         private DateTime _startTime;
-        private DispatcherTimer _timer;
+        private DispatcherTimer? _timer;
         private readonly StringBuilder _logBuilder = new();
         
         public event EventHandler? StopRequested;
+        
+        /// <summary>
+        /// 烧录模式：true = BOOT+APP, false = 仅APP
+        /// </summary>
+        public bool IsBurnBootAndApp => BurnModeBootApp.IsChecked == true;
+        
+        // 步骤指示器控件引用
+        private readonly List<Ellipse> _stepCircles = new();
+        private readonly List<PackIcon> _stepIcons = new();
+        private readonly List<Border> _stepLines = new();
+        private readonly List<TextBlock> _stepTexts = new();
         
         public SmartBurnWindow()
         {
             InitializeComponent();
             _startTime = DateTime.Now;
+            
+            // 初始化步骤指示器（默认BOOT+APP模式）
+            BuildStepIndicator();
             
             // 启动计时器
             _timer = new DispatcherTimer
@@ -41,6 +55,103 @@ namespace STM32Programmer
             };
             _timer.Tick += Timer_Tick;
             _timer.Start();
+        }
+        
+        /// <summary>
+        /// 构建步骤指示器
+        /// </summary>
+        private void BuildStepIndicator()
+        {
+            StepIndicatorPanel.Children.Clear();
+            _stepCircles.Clear();
+            _stepIcons.Clear();
+            _stepLines.Clear();
+            _stepTexts.Clear();
+            
+            // 根据模式确定步骤
+            string[] steps = IsBurnBootAndApp 
+                ? new[] { "连接", "BOOT", "APP", "完成" }
+                : new[] { "连接", "APP", "完成" };
+            
+            for (int i = 0; i < steps.Length; i++)
+            {
+                // 添加步骤圆圈
+                var stepPanel = CreateStepPanel(steps[i], i);
+                StepIndicatorPanel.Children.Add(stepPanel);
+                
+                // 添加连接线（最后一个步骤后不加）
+                if (i < steps.Length - 1)
+                {
+                    var line = CreateStepLine();
+                    StepIndicatorPanel.Children.Add(line);
+                }
+            }
+        }
+        
+        /// <summary>
+        /// 创建单个步骤面板
+        /// </summary>
+        private StackPanel CreateStepPanel(string text, int index)
+        {
+            var panel = new StackPanel { HorizontalAlignment = System.Windows.HorizontalAlignment.Center, Width = 50 };
+            
+            // 圆圈
+            var circle = new Ellipse
+            {
+                Width = 28,
+                Height = 28,
+                Fill = GrayBrush,
+                Stroke = GrayBorderBrush,
+                StrokeThickness = 2
+            };
+            _stepCircles.Add(circle);
+            
+            // 勾选图标
+            var icon = new PackIcon
+            {
+                Kind = PackIconKind.Check,
+                Width = 16,
+                Height = 16,
+                Foreground = System.Windows.Media.Brushes.White,
+                HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+                Margin = new Thickness(0, -22, 0, 0),
+                Visibility = Visibility.Collapsed
+            };
+            _stepIcons.Add(icon);
+            
+            // 文字
+            var textBlock = new TextBlock
+            {
+                Text = text,
+                FontSize = 10,
+                HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+                Margin = new Thickness(0, 4, 0, 0),
+                Foreground = new SolidColorBrush(Color.FromRgb(97, 97, 97))
+            };
+            _stepTexts.Add(textBlock);
+            
+            panel.Children.Add(circle);
+            panel.Children.Add(icon);
+            panel.Children.Add(textBlock);
+            
+            return panel;
+        }
+        
+        /// <summary>
+        /// 创建连接线
+        /// </summary>
+        private Border CreateStepLine()
+        {
+            var line = new Border
+            {
+                Width = 60,
+                Height = 3,
+                Background = GrayBrush,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 0, 14)
+            };
+            _stepLines.Add(line);
+            return line;
         }
         
         private void Timer_Tick(object? sender, EventArgs e)
@@ -194,14 +305,28 @@ namespace STM32Programmer
             {
                 AppProgressBar.Value = value;
                 AppProgressText.Text = $"{value}%";
-                // 总进度 = 50% + APP进度的一半 (50-100%)
-                int totalProgress = 50 + value / 2;
+                
+                int totalProgress;
+                
+                if (IsBurnBootAndApp)
+                {
+                    // BOOT+APP模式: 总进度 = 50% + APP进度的一半 (50-100%)
+                    totalProgress = 50 + value / 2;
+                    // BOOT+APP模式: 步骤为 连接(1)-BOOT(2)-APP(3)-完成(4)，APP是第3步
+                    UpdateStepIndicator(3, value == 100 ? StepState.Completed : StepState.InProgress);
+                }
+                else
+                {
+                    // 仅APP模式: 总进度 = 25% + APP进度的3/4 (25-100%)
+                    totalProgress = 25 + value * 3 / 4;
+                    // 仅APP模式: 步骤为 连接(1)-APP(2)-完成(3)，APP是第2步
+                    UpdateStepIndicator(2, value == 100 ? StepState.Completed : StepState.InProgress);
+                }
+                
                 CurrentProgressBar.Value = totalProgress;
                 ProgressText.Text = $"{totalProgress}%";
                 UpdateProgressFillWidth(totalProgress);
                 
-                // 更新步骤指示器
-                UpdateStepIndicator(3, value == 100 ? StepState.Completed : StepState.InProgress);
                 CurrentStepText.Text = $"正在烧录APP... {value}%";
             });
         }
@@ -219,62 +344,87 @@ namespace STM32Programmer
             });
         }
         
+        /// <summary>
+        /// 烧录模式切换事件
+        /// </summary>
+        private void BurnMode_Changed(object sender, RoutedEventArgs e)
+        {
+            UpdateStepLabels();
+        }
+        
+        /// <summary>
+        /// 根据烧录模式更新步骤显示和BOOT面板可见性
+        /// </summary>
+        public void UpdateStepLabels()
+        {
+            Dispatcher.Invoke(() =>
+            {
+                // 重新构建步骤指示器
+                BuildStepIndicator();
+                
+                // 更新BOOT固件面板可见性
+                if (BootFirmwarePanel != null)
+                {
+                    BootFirmwarePanel.Visibility = IsBurnBootAndApp ? Visibility.Visible : Visibility.Collapsed;
+                }
+            });
+        }
+        
         // 步骤状态枚举
         private enum StepState { Pending, InProgress, Completed }
         
-        // 更新步骤指示器
+        /// <summary>
+        /// 更新步骤指示器状态
+        /// </summary>
+        /// <param name="step">步骤索引（从1开始）</param>
+        /// <param name="state">状态</param>
         private void UpdateStepIndicator(int step, StepState state)
         {
-            Ellipse? circle = null;
-            MaterialDesignThemes.Wpf.PackIcon? icon = null;
-            Border? prevLine = null;
+            int index = step - 1;
+            if (index < 0 || index >= _stepCircles.Count) return;
             
-            (circle, icon, prevLine) = step switch
+            var circle = _stepCircles[index];
+            var icon = _stepIcons[index];
+            
+            var (fillBrush, strokeBrush, iconVisible) = state switch
             {
-                1 => (Step1Circle, Step1Icon, (Border?)null),
-                2 => (Step2Circle, Step2Icon, Line1),
-                3 => (Step3Circle, Step3Icon, Line2),
-                4 => (Step4Circle, Step4Icon, Line3),
-                _ => (null, null, null)
-            };
-            
-            if (circle == null) return;
-            
-            var (fillBrush, strokeBrush, iconVisible, lineBrush) = state switch
-            {
-                StepState.Completed => (GreenBrush, GreenBrush, true, GreenBrush),
-                StepState.InProgress => (BlueBrush, BlueBrush, false, GreenBrush),
-                _ => (GrayBrush, GrayBorderBrush, false, (SolidColorBrush?)null)
+                StepState.Completed => (GreenBrush, GreenBrush, true),
+                StepState.InProgress => (BlueBrush, BlueBrush, false),
+                _ => (GrayBrush, GrayBorderBrush, false)
             };
             
             circle.Fill = fillBrush;
             circle.Stroke = strokeBrush;
-            if (icon != null) icon.Visibility = iconVisible ? Visibility.Visible : Visibility.Collapsed;
-            if (prevLine != null && lineBrush != null) prevLine.Background = lineBrush;
+            icon.Visibility = iconVisible ? Visibility.Visible : Visibility.Collapsed;
+            
+            // 更新前一条连接线
+            if (index > 0 && index - 1 < _stepLines.Count && state != StepState.Pending)
+            {
+                _stepLines[index - 1].Background = GreenBrush;
+            }
         }
         
         // 重置步骤指示器
         private void ResetStepIndicator()
         {
-            Step1Circle.Fill = GrayBrush;
-            Step1Circle.Stroke = GrayBorderBrush;
-            Step1Icon.Visibility = Visibility.Collapsed;
+            // 重置所有动态生成的步骤圆圈
+            foreach (var circle in _stepCircles)
+            {
+                circle.Fill = GrayBrush;
+                circle.Stroke = GrayBorderBrush;
+            }
             
-            Step2Circle.Fill = GrayBrush;
-            Step2Circle.Stroke = GrayBorderBrush;
-            Step2Icon.Visibility = Visibility.Collapsed;
+            // 隐藏所有勾选图标
+            foreach (var icon in _stepIcons)
+            {
+                icon.Visibility = Visibility.Collapsed;
+            }
             
-            Step3Circle.Fill = GrayBrush;
-            Step3Circle.Stroke = GrayBorderBrush;
-            Step3Icon.Visibility = Visibility.Collapsed;
-            
-            Step4Circle.Fill = GrayBrush;
-            Step4Circle.Stroke = GrayBorderBrush;
-            Step4Icon.Visibility = Visibility.Collapsed;
-            
-            Line1.Background = GrayBrush;
-            Line2.Background = GrayBrush;
-            Line3.Background = GrayBrush;
+            // 重置所有连接线
+            foreach (var line in _stepLines)
+            {
+                line.Background = GrayBrush;
+            }
             
             CurrentProgressBar.Value = 0;
             ProgressText.Text = "0%";
@@ -288,7 +438,12 @@ namespace STM32Programmer
             {
                 if (success)
                 {
-                    UpdateStepIndicator(4, StepState.Completed);
+                    // 根据模式更新完成步骤
+                    // BOOT+APP模式: 连接(1)-BOOT(2)-APP(3)-完成(4)，共4步
+                    // 仅APP模式: 连接(1)-APP(2)-完成(3)，共3步
+                    int lastStep = IsBurnBootAndApp ? 4 : 3;
+                    UpdateStepIndicator(lastStep, StepState.Completed);
+                    
                     CurrentProgressBar.Value = 100;
                     ProgressText.Text = "100%";
                     UpdateProgressFillWidth(100);
@@ -455,7 +610,7 @@ namespace STM32Programmer
         {
             Dispatcher.Invoke(() =>
             {
-                _timer.Stop();
+                _timer?.Stop();
                 StatusText.Text = "已停止";
                 StopButton.IsEnabled = false;
                 

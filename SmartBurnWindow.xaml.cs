@@ -62,6 +62,9 @@ namespace STM32Programmer
         /// </summary>
         private void BuildStepIndicator()
         {
+            // 防止XAML初始化时控件还未创建
+            if (StepIndicatorPanel == null) return;
+            
             StepIndicatorPanel.Children.Clear();
             _stepCircles.Clear();
             _stepIcons.Clear();

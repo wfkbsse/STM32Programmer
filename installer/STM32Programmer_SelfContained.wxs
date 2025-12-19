@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+    
+    <Package Name="STM32Programmer" 
+             Manufacturer="STM32Programmer" 
+             Version="1.0.0.0" 
+             UpgradeCode="38F8B7B1-C5EA-4A7A-90BA-1E1F1E5F143B"
+             Language="2052"
+             Codepage="936"
+             InstallerVersion="500"
+             Compressed="yes"
+             Scope="perMachine">
+        
+        <SummaryInformation Description="STM32固件烧写工具安装程序 (自包含版)" 
+                           Manufacturer="STM32Programmer"
+                           Keywords="STM32,固件,烧写,烧录" />
+        
+        <MajorUpgrade DowngradeErrorMessage="已安装更新版本的 STM32Programmer，无法降级安装。" 
+                      AllowSameVersionUpgrades="yes" />
+        <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+        
+        <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
+        <WixVariable Id="WixUILicenseRtf" Value="installer\License.rtf" />
+        
+        <Feature Id="ProductFeature" Title="STM32Programmer 主程序" Level="1" AllowAbsent="no">
+            <ComponentGroupRef Id="PublishFiles" />
+            <ComponentRef Id="ApplicationShortcut" />
+            <ComponentRef Id="UninstallShortcut" />
+            <ComponentRef Id="DesktopShortcut" />
+        </Feature>
+        
+        <Icon Id="ProductIcon" SourceFile="$(var.SourceDir)\app.ico" />
+        <Property Id="ARPPRODUCTICON" Value="ProductIcon" />
+        <Property Id="ARPURLINFOABOUT" Value="https://github.com/wfkbsse/STM32Programmer" />
+        <Property Id="ARPHELPLINK" Value="https://github.com/wfkbsse/STM32Programmer/issues" />
+        <Property Id="ARPNOREPAIR" Value="yes" />
+    </Package>
+    
+    <Fragment>
+        <StandardDirectory Id="ProgramFiles64Folder">
+            <Directory Id="INSTALLFOLDER" Name="STM32Programmer" />
+        </StandardDirectory>
+        
+        <StandardDirectory Id="ProgramMenuFolder">
+            <Directory Id="ApplicationProgramsFolder" Name="STM32Programmer" />
+        </StandardDirectory>
+        
+        <StandardDirectory Id="DesktopFolder" />
+    </Fragment>
+    
+    <Fragment>
+        <!-- 使用Files元素自动收集publish目录下所有文件 -->
+        <ComponentGroup Id="PublishFiles" Directory="INSTALLFOLDER">
+            <Files Include="$(sys.SOURCEFILEDIR)..\bin\Release\net8.0-windows\win-x64\publish\**">
+                <Exclude Files="$(sys.SOURCEFILEDIR)..\bin\Release\net8.0-windows\win-x64\publish\**\*.pdb" />
+            </Files>
+        </ComponentGroup>
+        
+        <!-- 开始菜单快捷方式 -->
+        <Component Id="ApplicationShortcut" Guid="*" Directory="ApplicationProgramsFolder">
+            <Shortcut Id="ApplicationStartMenuShortcut"
+                      Name="STM32Programmer"
+                      Description="STM32固件烧写工具"
+                      Target="[INSTALLFOLDER]STM32Programmer.exe"
+                      WorkingDirectory="INSTALLFOLDER"
+                      Icon="ProductIcon" />
+            <RemoveFolder Id="CleanUpShortCut" Directory="ApplicationProgramsFolder" On="uninstall" />
+            <RegistryValue Root="HKCU" Key="Software\STM32Programmer" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+        </Component>
+        
+        <!-- 卸载快捷方式 -->
+        <Component Id="UninstallShortcut" Guid="*" Directory="ApplicationProgramsFolder">
+            <Shortcut Id="UninstallProduct"
+                      Name="卸载 STM32Programmer"
+                      Target="[System64Folder]msiexec.exe"
+                      Arguments="/x [ProductCode]"
+                      Icon="ProductIcon" />
+            <RegistryValue Root="HKCU" Key="Software\STM32Programmer" Name="uninstall" Type="integer" Value="1" KeyPath="yes" />
+        </Component>
+        
+        <!-- 桌面快捷方式 -->
+        <Component Id="DesktopShortcut" Guid="*" Directory="DesktopFolder">
+            <Shortcut Id="DesktopShortcut"
+                      Name="STM32Programmer"
+                      Description="STM32固件烧写工具"
+                      Target="[INSTALLFOLDER]STM32Programmer.exe"
+                      WorkingDirectory="INSTALLFOLDER"
+                      Icon="ProductIcon" />
+            <RegistryValue Root="HKCU" Key="Software\STM32Programmer" Name="desktop" Type="integer" Value="1" KeyPath="yes" />
+        </Component>
+    </Fragment>
+</Wix>

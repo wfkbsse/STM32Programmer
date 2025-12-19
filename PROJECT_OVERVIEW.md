@@ -71,7 +71,7 @@ STM32Programmer/
 # 标准编译
 dotnet build -c Release
 
-# 指定平台编译 (用于 MSI 打包)
+# 指定平台编译 (用于 MSI 打包，依赖框架模式)
 dotnet build -c Release -r win-x64 --no-self-contained
 ```
 

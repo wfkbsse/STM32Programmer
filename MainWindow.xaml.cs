@@ -73,6 +73,9 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         
+        // 启用触摸支持 - 必须在InitializeComponent之后立即调用
+        EnableTouchSupport();
+        
         _isDesignMode = System.ComponentModel.DesignerProperties.GetIsInDesignMode(new DependencyObject());
             
             if (!_isDesignMode)
@@ -3628,6 +3631,106 @@ public partial class MainWindow : Window
         {
             Debug.WriteLine($"添加串口日志时出错: {ex.Message}");
         }
+    }
+    
+    #endregion
+    
+    #region 触摸支持
+    
+    private Button? _touchedButton;
+    
+    /// <summary>
+    /// 启用触摸支持 - 解决触摸屏按钮点击无响应问题
+    /// </summary>
+    private void EnableTouchSupport()
+    {
+        // 禁用WPF默认的触摸行为
+        Stylus.SetIsPressAndHoldEnabled(this, false);
+        Stylus.SetIsFlicksEnabled(this, false);
+        Stylus.SetIsTapFeedbackEnabled(this, false);
+        Stylus.SetIsTouchFeedbackEnabled(this, false);
+        
+        // 使用PreviewTouch事件，在路由事件隧道阶段处理
+        this.PreviewTouchDown += MainWindow_PreviewTouchDown;
+        this.PreviewTouchUp += MainWindow_PreviewTouchUp;
+    }
+    
+    /// <summary>
+    /// 触摸按下事件处理
+    /// </summary>
+    private void MainWindow_PreviewTouchDown(object? sender, TouchEventArgs e)
+    {
+        // 获取触摸点下的元素
+        var touchPoint = e.GetTouchPoint(this);
+        var element = InputHitTest(touchPoint.Position) as DependencyObject;
+        
+        // 向上查找Button或其他可点击控件
+        _touchedButton = FindParent<Button>(element);
+        
+        if (_touchedButton != null && _touchedButton.IsEnabled)
+        {
+            // 捕获触摸设备
+            e.TouchDevice.Capture(_touchedButton);
+        }
+    }
+    
+    /// <summary>
+    /// 触摸抬起事件处理 - 触发按钮点击
+    /// </summary>
+    private void MainWindow_PreviewTouchUp(object? sender, TouchEventArgs e)
+    {
+        try
+        {
+            if (_touchedButton != null && _touchedButton.IsEnabled)
+            {
+                // 检查触摸点是否仍在按钮范围内
+                var touchPoint = e.GetTouchPoint(_touchedButton);
+                var bounds = new Rect(0, 0, _touchedButton.ActualWidth, _touchedButton.ActualHeight);
+                
+                if (bounds.Contains(touchPoint.Position))
+                {
+                    // 使用Dispatcher确保在UI线程上执行
+                    var buttonToClick = _touchedButton;
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        try
+                        {
+                            // 方法1: 使用AutomationPeer触发点击
+                            var peer = new System.Windows.Automation.Peers.ButtonAutomationPeer(buttonToClick);
+                            var invokeProvider = peer.GetPattern(System.Windows.Automation.Peers.PatternInterface.Invoke) 
+                                as System.Windows.Automation.Provider.IInvokeProvider;
+                            invokeProvider?.Invoke();
+                        }
+                        catch
+                        {
+                            // 方法2: 备用方案 - 直接触发RoutedEvent
+                            buttonToClick.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                        }
+                    }), DispatcherPriority.Input);
+                }
+            }
+        }
+        finally
+        {
+            // 释放捕获和清理
+            e.TouchDevice.Capture(null);
+            _touchedButton = null;
+            e.Handled = true;
+        }
+    }
+    
+    /// <summary>
+    /// 向上查找指定类型的父元素
+    /// </summary>
+    private static T? FindParent<T>(DependencyObject? child) where T : DependencyObject
+    {
+        while (child != null)
+        {
+            if (child is T parent)
+                return parent;
+            child = VisualTreeHelper.GetParent(child);
+        }
+        return null;
     }
     
     #endregion

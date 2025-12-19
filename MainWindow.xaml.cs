@@ -150,6 +150,9 @@ public partial class MainWindow : Window
             // 窗口完全加载后初始化UI
             InitializeUI();
             
+            // 设置默认烧录地址
+            InitializeDefaultAddresses();
+            
             // 确保连接状态正确显示
             UpdateConnectionStatus();
             
@@ -167,6 +170,22 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             LogMessage($"窗口加载时出错: {ex.Message}", LogLevel.Error);
+        }
+    }
+    
+    /// <summary>
+    /// 初始化默认烧录地址
+    /// </summary>
+    private void InitializeDefaultAddresses()
+    {
+        if (BootStartAddressTextBox != null && string.IsNullOrWhiteSpace(BootStartAddressTextBox.Text))
+        {
+            BootStartAddressTextBox.Text = "0x08000000";
+        }
+        
+        if (AppStartAddressTextBox != null && string.IsNullOrWhiteSpace(AppStartAddressTextBox.Text))
+        {
+            AppStartAddressTextBox.Text = "0x08010000";
         }
     }
     
@@ -551,6 +570,9 @@ public partial class MainWindow : Window
             return;
         }
         
+        // 同步UI中的地址到固件对象
+        SyncFirmwareAddresses();
+        
         await BurnFirmwareAsync(_bootFirmware);
     }
     
@@ -561,6 +583,9 @@ public partial class MainWindow : Window
             System.Windows.MessageBox.Show("请先选择有效的APP固件", "提示", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
+        
+        // 同步UI中的地址到固件对象
+        SyncFirmwareAddresses();
         
         await BurnFirmwareAsync(_appFirmware);
     }
@@ -579,6 +604,9 @@ public partial class MainWindow : Window
             return;
         }
         
+        // 同步UI中的地址到固件对象
+        SyncFirmwareAddresses();
+        
         LogMessage("开始一键烧录过程...");
         
         // 先烧BOOT，再烧APP
@@ -586,6 +614,34 @@ public partial class MainWindow : Window
         if (bootSuccess)
         {
             await BurnFirmwareAsync(_appFirmware);
+        }
+    }
+    
+    /// <summary>
+    /// 同步UI中的地址设置到固件对象
+    /// </summary>
+    private void SyncFirmwareAddresses()
+    {
+        if (_bootFirmware != null)
+        {
+            string bootAddr = BootStartAddressTextBox?.Text ?? "";
+            // 如果UI中有地址则使用，否则保持固件对象中的默认值
+            if (!string.IsNullOrWhiteSpace(bootAddr))
+            {
+                _bootFirmware.StartAddress = bootAddr;
+            }
+            LogMessage($"BOOT烧录地址: {_bootFirmware.StartAddress}");
+        }
+        
+        if (_appFirmware != null)
+        {
+            string appAddr = AppStartAddressTextBox?.Text ?? "";
+            // 如果UI中有地址则使用，否则保持固件对象中的默认值
+            if (!string.IsNullOrWhiteSpace(appAddr))
+            {
+                _appFirmware.StartAddress = appAddr;
+            }
+            LogMessage($"APP烧录地址: {_appFirmware.StartAddress}");
         }
     }
     
@@ -621,6 +677,9 @@ public partial class MainWindow : Window
             return;
         }
         
+        // 同步UI中的地址到固件对象
+        SyncFirmwareAddresses();
+        
         _isSmartBurnRunning = true;
         _smartBurnCount = 0;
         _smartBurnSuccessCount = 0;
@@ -640,12 +699,12 @@ public partial class MainWindow : Window
                 _bootFirmware.FileSize,
                 _bootFirmware.FilePath,
                 _bootFirmware.LastModified,
-                "0x08000000",  // BOOT默认烧录地址
+                _bootFirmware.StartAddress,  // 使用固件对象中的地址
                 _appFirmware.FileName,
                 _appFirmware.FileSize,
                 _appFirmware.FilePath,
                 _appFirmware.LastModified,
-                "0x08010000"   // APP默认烧录地址
+                _appFirmware.StartAddress    // 使用固件对象中的地址
             );
         }
         else
@@ -661,7 +720,7 @@ public partial class MainWindow : Window
                 _appFirmware.FileSize,
                 _appFirmware.FilePath,
                 _appFirmware.LastModified,
-                "0x08010000"   // APP默认烧录地址
+                _appFirmware.StartAddress    // 使用固件对象中的地址
             );
         }
         
@@ -954,8 +1013,9 @@ public partial class MainWindow : Window
                 return false;
             }
             
-            _logService?.LogInfo("智能烧录", "APP固件烧录成功");
-            _smartBurnWindow?.AddLog("APP固件烧录成功");
+            // 烧录成功（CLI工具的-v参数已在烧录过程中完成校验）
+            _logService?.LogInfo("智能烧录", "APP固件烧录并校验成功");
+            _smartBurnWindow?.AddLog("APP固件烧录并校验成功（烧录过程中已完成数据校验）");
             
             // 重置进度条
             _ = Application.Current.Dispatcher.BeginInvoke(new Action(() =>
@@ -1144,16 +1204,17 @@ public partial class MainWindow : Window
             
             if (success)
             {
-                string successMessage = $"{(firmware.Type == FirmwareType.Boot ? "BOOT" : "APP")}固件烧写成功";
+                // 烧录成功（CLI工具的-v参数已在烧录过程中完成校验）
+                string successMessage = $"{(firmware.Type == FirmwareType.Boot ? "BOOT" : "APP")}固件烧写并校验成功";
                 ShowStatus(successMessage, PackIconKind.CheckCircle, 5000);
-                LogMessage($"固件烧写成功: {firmware.FileName}");
+                LogMessage($"固件烧写并校验成功: {firmware.FileName}");
                 
                 // 更新结果对话框内容
                 confirmAndProgressContent.Title = $"{(firmware.Type == FirmwareType.Boot ? "BOOT" : "APP")}固件烧录成功";
                 confirmAndProgressContent.Message = firmware.Type == FirmwareType.Boot 
-                    ? "BOOT固件已成功烧写到设备！\n\n建议重新上电设备以确保固件正常运行。"
-                    : "应用程序固件已成功烧写到设备！\n\n设备现在可以正常使用新的应用程序。";
-                confirmAndProgressContent.Icon = PackIconKind.CheckCircleOutline;
+                    ? "BOOT固件已成功烧写并校验通过！\n\n烧录过程中已完成数据校验。\n\n建议重新上电设备以确保固件正常运行。"
+                    : "应用程序固件已成功烧写并校验通过！\n\n烧录过程中已完成数据校验。\n\n设备现在可以正常使用新的应用程序。";
+                confirmAndProgressContent.Icon = PackIconKind.ShieldCheckOutline;
                 confirmAndProgressContent.PrimaryButtonText = "确定";
                 confirmAndProgressContent.IsSuccess = true;
                 confirmAndProgressContent.ShowProgress = false;
@@ -2615,10 +2676,17 @@ public partial class MainWindow : Window
                 // 更新最后修改日期
                 BootFileModifiedText.Text = fileInfo.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss");
                 
+                // 更新烧录地址（从固件文件解析的地址）
+                if (!string.IsNullOrEmpty(firmware.StartAddress) && BootStartAddressTextBox != null)
+                {
+                    BootStartAddressTextBox.Text = firmware.StartAddress;
+                    LogMessage($"BOOT固件烧录地址: {firmware.StartAddress}");
+                }
+                
                 LogMessage($"已加载BOOT固件信息: {fileInfo.Name}");
-        }
-        else
-        {
+            }
+            else
+            {
                 LogMessage("BOOT固件文件不存在", LogLevel.Warning);
                 ClearBootFirmwareInfo();
             }
@@ -2648,6 +2716,13 @@ public partial class MainWindow : Window
                 
                 // 更新最后修改日期
                 AppFileModifiedText.Text = fileInfo.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss");
+                
+                // 更新烧录地址（从固件文件解析的地址）
+                if (!string.IsNullOrEmpty(firmware.StartAddress) && AppStartAddressTextBox != null)
+                {
+                    AppStartAddressTextBox.Text = firmware.StartAddress;
+                    LogMessage($"APP固件烧录地址: {firmware.StartAddress}");
+                }
                 
                 LogMessage($"已加载APP固件信息: {fileInfo.Name}");
             }

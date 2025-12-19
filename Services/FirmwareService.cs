@@ -267,6 +267,14 @@ namespace STM32Programmer.Services
                     return false;
                 }
 
+                // 从文件解析起始地址
+                string parsedAddress = ParseFirmwareStartAddress(firmware.FilePath);
+                if (!string.IsNullOrEmpty(parsedAddress))
+                {
+                    firmware.StartAddress = parsedAddress;
+                    LogMessage?.Invoke(this, $"从文件解析到起始地址: {parsedAddress}");
+                }
+
                 // 文件名检查
                 var fileName = Path.GetFileName(firmware.FilePath).ToLower();
                 bool containsKeyword = firmware.Type == FirmwareType.Boot
@@ -279,7 +287,7 @@ namespace STM32Programmer.Services
                 }
 
                 firmware.IsValid = true;
-                LogMessage?.Invoke(this, "固件验证通过: " + firmware.FileName + ", 大小: " + firmware.FileSize / 1024 + " KB, 哈希值: " + firmware.FileHash.Substring(0, 8) + "...");
+                LogMessage?.Invoke(this, $"固件验证通过: {firmware.FileName}, 大小: {firmware.FileSize / 1024} KB, 地址: {firmware.StartAddress}, 哈希值: {firmware.FileHash.Substring(0, 8)}...");
                 return true;
             }
             catch (Exception ex)
@@ -417,6 +425,102 @@ namespace STM32Programmer.Services
         protected virtual void Log(string category, string message, LogLevel level = LogLevel.Info)
         {
             LogMessage?.Invoke(this, "[" + level + "][" + category + "] " + message);
+        }
+        
+        /// <summary>
+        /// 从固件文件解析起始地址
+        /// HEX文件包含地址信息，BIN文件使用默认地址
+        /// </summary>
+        public string ParseFirmwareStartAddress(string filePath)
+        {
+            try
+            {
+                var extension = Path.GetExtension(filePath).ToLower();
+                
+                if (extension == ".hex")
+                {
+                    return ParseHexFileAddress(filePath);
+                }
+                else if (extension == ".bin")
+                {
+                    // BIN文件没有地址信息，返回空让调用者使用默认值
+                    return "";
+                }
+                
+                return "";
+            }
+            catch (Exception ex)
+            {
+                LogMessage?.Invoke(this, $"解析固件地址时出错: {ex.Message}");
+                return "";
+            }
+        }
+        
+        /// <summary>
+        /// 解析Intel HEX文件的起始地址
+        /// HEX格式: :LLAAAATT[DD...]CC
+        /// LL=数据长度, AAAA=地址, TT=类型, DD=数据, CC=校验和
+        /// 类型: 00=数据, 01=EOF, 02=扩展段地址, 04=扩展线性地址
+        /// </summary>
+        private string ParseHexFileAddress(string filePath)
+        {
+            uint baseAddress = 0;
+            uint? firstDataAddress = null;
+            
+            using var reader = new StreamReader(filePath);
+            string? line;
+            
+            while ((line = reader.ReadLine()) != null)
+            {
+                line = line.Trim();
+                if (string.IsNullOrEmpty(line) || !line.StartsWith(":"))
+                    continue;
+                
+                // 解析HEX记录
+                if (line.Length < 11)
+                    continue;
+                
+                int byteCount = Convert.ToInt32(line.Substring(1, 2), 16);
+                int address = Convert.ToInt32(line.Substring(3, 4), 16);
+                int recordType = Convert.ToInt32(line.Substring(7, 2), 16);
+                
+                switch (recordType)
+                {
+                    case 0x00: // 数据记录
+                        if (firstDataAddress == null)
+                        {
+                            firstDataAddress = baseAddress + (uint)address;
+                        }
+                        break;
+                        
+                    case 0x01: // EOF记录
+                        break;
+                        
+                    case 0x02: // 扩展段地址 (用于8086)
+                        if (line.Length >= 13)
+                        {
+                            int segmentAddress = Convert.ToInt32(line.Substring(9, 4), 16);
+                            baseAddress = (uint)(segmentAddress << 4);
+                        }
+                        break;
+                        
+                    case 0x04: // 扩展线性地址 (用于32位地址)
+                        if (line.Length >= 13)
+                        {
+                            int upperAddress = Convert.ToInt32(line.Substring(9, 4), 16);
+                            baseAddress = (uint)(upperAddress << 16);
+                        }
+                        break;
+                }
+                
+                // 找到第一个数据地址后就可以返回了
+                if (firstDataAddress != null)
+                {
+                    return $"0x{firstDataAddress:X8}";
+                }
+            }
+            
+            return firstDataAddress != null ? $"0x{firstDataAddress:X8}" : "";
         }
     }
 } 

@@ -900,8 +900,9 @@ namespace STM32Programmer.Services
                         return false;
                     }
 
-                    // 根据固件类型确定额外参数
-                    string address = firmware.Type == FirmwareType.Boot ? "0x08000000" : "0x08020000";
+                    // 使用固件文件中配置的地址
+                    string address = firmware.StartAddress;
+                    LogMessage?.Invoke(this, $"[LogLevel.Info] 烧录地址: {address}");
                     
                     // BOOT固件需要擦除所有分区，APP固件只需要擦除APP区域
                     bool needErase = firmware.Type == FirmwareType.Boot;
@@ -1008,25 +1009,17 @@ namespace STM32Programmer.Services
             {
                 // 确定擦除参数
                 string eraseParam = "";
-                if (needErase)
-                {
-                    // BOOT固件需要擦除所有分区
-                    eraseParam = " -e all";
-                }
-                else
-                {
-                    // APP固件只擦除必要的区域
-                    eraseParam = " -e";
-                }
                 
                 // 如果命令已经包含擦除指令，不再添加
                 if (programCommand.Contains("-e") || programCommand.Contains("--erase"))
                 {
                     eraseParam = "";
+                    LogMessage?.Invoke(this, "[LogLevel.Debug] 命令已包含擦除指令");
                 }
                 else if (needErase)
                 {
-                    // BOOT需要擦除且命令不包含擦除指令，先尝试单独擦除
+                    // BOOT固件需要擦除所有分区 - 先执行单独擦除
+                    LogMessage?.Invoke(this, "[LogLevel.Warning] BOOT固件烧写，执行全片擦除...");
                     // 擦除前先确认连接
                     if (!VerifyConnection())
                     {
@@ -1042,7 +1035,7 @@ namespace STM32Programmer.Services
                         return false;
                     }
                     
-                    LogMessage?.Invoke(this, "[LogLevel.Info] 芯片擦除成功，继续烧写过程");
+                    LogMessage?.Invoke(this, "[LogLevel.Info] 全片擦除成功，继续烧写过程");
                     progress?.Report(30);
                     
                     // 擦除后短暂延迟确保操作完成
@@ -1050,6 +1043,12 @@ namespace STM32Programmer.Services
                     
                     // 已单独擦除，命令中不再添加擦除
                     eraseParam = "";
+                }
+                else
+                {
+                    // APP固件只擦除必要的区域（由CLI工具自动处理）
+                    eraseParam = "";
+                    LogMessage?.Invoke(this, "[LogLevel.Info] APP固件烧写，仅擦除必要扇区");
                 }
                 
                 // 根据固件类型决定是否自动复位
@@ -1487,5 +1486,202 @@ namespace STM32Programmer.Services
                 // 忽略日志记录失败，防止崩溃
             }
         }
+        
+        #region 烧录后校验功能
+        
+        /// <summary>
+        /// 烧录后校验 - 使用STM32_Programmer_CLI的-v命令校验
+        /// </summary>
+        /// <param name="firmware">原始固件文件</param>
+        /// <param name="progress">进度回调</param>
+        /// <returns>校验结果</returns>
+        public async Task<VerifyResult> VerifyFirmwareAsync(FirmwareFile firmware, IProgress<int>? progress = null)
+        {
+            var result = new VerifyResult();
+            
+            try
+            {
+                return await Task.Run(() =>
+                {
+                    LogMessage?.Invoke(this, $"[LogLevel.Info] 开始校验固件: {firmware.FileName}");
+                    progress?.Report(10);
+                    
+                    // 检查CLI工具
+                    if (!File.Exists(_stLinkUtilityPath))
+                    {
+                        result.Success = false;
+                        result.ErrorMessage = "STM32 Programmer CLI工具未找到";
+                        return result;
+                    }
+                    
+                    // 使用固件文件中配置的地址
+                    string address = firmware.StartAddress;
+                    LogMessage?.Invoke(this, $"[LogLevel.Info] 校验地址: {address}");
+                    
+                    progress?.Report(30);
+                    
+                    // 使用CLI工具的校验命令
+                    string verifyCommand = $"-c port=SWD -v \"{firmware.FilePath}\" {address}";
+                    LogMessage?.Invoke(this, $"[LogLevel.Debug] 校验命令: {verifyCommand}");
+                    
+                    var startInfo = new ProcessStartInfo
+                    {
+                        FileName = _stLinkUtilityPath,
+                        Arguments = verifyCommand,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    };
+                    
+                    progress?.Report(50);
+                    
+                    using var process = Process.Start(startInfo);
+                    if (process == null)
+                    {
+                        result.Success = false;
+                        result.ErrorMessage = "无法启动CLI工具";
+                        return result;
+                    }
+                    
+                    string output = process.StandardOutput.ReadToEnd();
+                    string error = process.StandardError.ReadToEnd();
+                    process.WaitForExit(30000);
+                    
+                    progress?.Report(80);
+                    
+                    LogMessage?.Invoke(this, $"[LogLevel.Debug] 校验输出: {output}");
+                    
+                    // 分析校验结果
+                    bool verified = output.Contains("Download verified successfully") ||
+                                   output.Contains("verified successfully") ||
+                                   output.Contains("Verify successfully") ||
+                                   (process.ExitCode == 0 && !error.Contains("Error") && !output.Contains("failed"));
+                    
+                    if (verified)
+                    {
+                        result.Success = true;
+                        result.Message = $"校验通过！固件数据一致 ({firmware.FileSize} 字节)";
+                        result.OriginalSize = (int)firmware.FileSize;
+                        result.ReadSize = (int)firmware.FileSize;
+                        LogMessage?.Invoke(this, $"[LogLevel.Info] {result.Message}");
+                    }
+                    else
+                    {
+                        result.Success = false;
+                        result.ErrorMessage = "校验失败，芯片数据与固件不一致";
+                        if (!string.IsNullOrEmpty(error))
+                        {
+                            LogMessage?.Invoke(this, $"[LogLevel.Error] 校验错误: {error}");
+                        }
+                        LogMessage?.Invoke(this, $"[LogLevel.Error] {result.ErrorMessage}");
+                    }
+                    
+                    progress?.Report(100);
+                    return result;
+                });
+            }
+            catch (Exception ex)
+            {
+                result.Success = false;
+                result.ErrorMessage = $"校验过程出错: {ex.Message}";
+                LogMessage?.Invoke(this, $"[LogLevel.Error] {result.ErrorMessage}");
+                return result;
+            }
+        }
+        
+        /// <summary>
+        /// 快速校验 - 使用STM32_Programmer_CLI的内置校验功能
+        /// </summary>
+        public async Task<VerifyResult> QuickVerifyFirmwareAsync(FirmwareFile firmware, IProgress<int>? progress = null)
+        {
+            var result = new VerifyResult();
+            
+            try
+            {
+                return await Task.Run(() =>
+                {
+                    LogMessage?.Invoke(this, $"[LogLevel.Info] 开始快速校验: {firmware.FileName}");
+                    progress?.Report(20);
+                    
+                    string address = firmware.Type == FirmwareType.Boot ? "0x08000000" : "0x08020000";
+                    
+                    // 使用-v fast进行快速校验
+                    string verifyCommand = $"-c port=SWD -v fast \"{firmware.FilePath}\" {address}";
+                    
+                    var startInfo = new ProcessStartInfo
+                    {
+                        FileName = _stLinkUtilityPath,
+                        Arguments = verifyCommand,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    };
+                    
+                    progress?.Report(50);
+                    
+                    using var process = Process.Start(startInfo);
+                    if (process == null)
+                    {
+                        result.Success = false;
+                        result.ErrorMessage = "无法启动CLI工具";
+                        return result;
+                    }
+                    
+                    string output = process.StandardOutput.ReadToEnd();
+                    string error = process.StandardError.ReadToEnd();
+                    process.WaitForExit(30000);
+                    
+                    progress?.Report(90);
+                    
+                    // 分析输出判断校验结果
+                    if (output.Contains("verified successfully") || 
+                        output.Contains("Verify successfully") ||
+                        output.Contains("Download verified successfully"))
+                    {
+                        result.Success = true;
+                        result.Message = "快速校验通过！";
+                        LogMessage?.Invoke(this, "[LogLevel.Info] 快速校验通过");
+                    }
+                    else if (output.Contains("Verify failed") || error.Contains("Error"))
+                    {
+                        result.Success = false;
+                        result.ErrorMessage = "快速校验失败，数据不一致";
+                        LogMessage?.Invoke(this, "[LogLevel.Error] 快速校验失败");
+                    }
+                    else
+                    {
+                        result.Success = process.ExitCode == 0;
+                        result.Message = result.Success ? "校验完成" : "校验结果未知";
+                    }
+                    
+                    progress?.Report(100);
+                    return result;
+                });
+            }
+            catch (Exception ex)
+            {
+                result.Success = false;
+                result.ErrorMessage = $"校验出错: {ex.Message}";
+                return result;
+            }
+        }
+        
+        #endregion
+    }
+    
+    /// <summary>
+    /// 校验结果
+    /// </summary>
+    public class VerifyResult
+    {
+        public bool Success { get; set; }
+        public string Message { get; set; } = "";
+        public string ErrorMessage { get; set; } = "";
+        public int OriginalSize { get; set; }
+        public int ReadSize { get; set; }
+        public int MismatchCount { get; set; }
+        public int FirstMismatchOffset { get; set; } = -1;
     }
 } 
